@@ -220,6 +220,47 @@ export interface UpdateSystemSettingsRequest {
   academic_year?: string;
 }
 
+// Prediction Settings types
+export interface PredictionWeights {
+  previous_class: number;
+  teacher: number;
+  quarters: number;
+}
+
+export interface PredictionWeightsResponse {
+  id: number;
+  name: string;
+  weights: PredictionWeights;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UpdatePredictionWeightsRequest {
+  weights: PredictionWeights;
+  name?: string;
+}
+
+// Excel Column Mapping types
+export interface ExcelColumnMapping {
+  id: number;
+  field_name: string;
+  column_aliases: string[];
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateExcelColumnMappingRequest {
+  field_name: string;
+  column_aliases: string[];
+}
+
+export interface UpdateExcelColumnMappingRequest {
+  column_aliases?: string[];
+  is_active?: number;
+}
+
 export interface AvailableClassesResponse {
   classes: string[];
   grades: number[];
@@ -589,6 +630,54 @@ class ApiService {
       throw handleApiError(error);
     }
   }
+
+  // Prediction Weights
+  async getPredictionWeights(): Promise<PredictionWeightsResponse> {
+    try {
+      const response: AxiosResponse<PredictionWeightsResponse> = await apiClient.get('/settings/prediction-weights');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async updatePredictionWeights(weightsData: UpdatePredictionWeightsRequest): Promise<PredictionWeightsResponse> {
+    try {
+      const response: AxiosResponse<PredictionWeightsResponse> = await apiClient.put('/settings/prediction-weights', weightsData);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  // Excel Column Mappings
+  async getExcelColumnMappings(): Promise<ExcelColumnMapping[]> {
+    try {
+      const response: AxiosResponse<ExcelColumnMapping[]> = await apiClient.get('/settings/excel-mapping');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async createExcelColumnMapping(mappingData: CreateExcelColumnMappingRequest): Promise<ExcelColumnMapping> {
+    try {
+      const response: AxiosResponse<ExcelColumnMapping> = await apiClient.post('/settings/excel-mapping', mappingData);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async updateExcelColumnMapping(fieldName: string, mappingData: UpdateExcelColumnMappingRequest): Promise<ExcelColumnMapping> {
+    try {
+      const response: AxiosResponse<ExcelColumnMapping> = await apiClient.put(`/settings/excel-mapping/${fieldName}`, mappingData);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
   // ==================== ENHANCED SCHOOL MANAGEMENT ====================
 
   // Subgroups

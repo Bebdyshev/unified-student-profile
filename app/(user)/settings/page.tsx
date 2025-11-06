@@ -25,7 +25,9 @@ import {
   GraduationCap,
   AlertCircle,
   Check,
-  Trash2
+  Trash2,
+  BarChart3,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useSystemSettings } from '@/hooks/use-system-settings';
@@ -47,6 +49,21 @@ export default function SystemSettingsPage() {
   
   const [newLetter, setNewLetter] = useState('');
   const [saving, setSaving] = useState(false);
+  
+  // Prediction weights state
+  const [predictionWeights, setPredictionWeights] = useState({
+    previous_class: 0.3,
+    teacher: 0.2,
+    quarters: 0.5
+  });
+  const [loadingWeights, setLoadingWeights] = useState(false);
+  const [savingWeights, setSavingWeights] = useState(false);
+  
+  // Excel column mappings state
+  const [columnMappings, setColumnMappings] = useState<any[]>([]);
+  const [loadingMappings, setLoadingMappings] = useState(false);
+  const [editingMapping, setEditingMapping] = useState<string | null>(null);
+  const [newAlias, setNewAlias] = useState('');
 
   // Load current user
   useEffect(() => {
@@ -85,6 +102,42 @@ export default function SystemSettingsPage() {
       });
     }
   }, [settings]);
+
+  // Load prediction weights
+  useEffect(() => {
+    const loadPredictionWeights = async () => {
+      if (user && user.type === 'admin') {
+        try {
+          setLoadingWeights(true);
+          const weights = await api.getPredictionWeights();
+          setPredictionWeights(weights.weights);
+        } catch (error) {
+          console.error('Failed to load prediction weights:', error);
+        } finally {
+          setLoadingWeights(false);
+        }
+      }
+    };
+    loadPredictionWeights();
+  }, [user]);
+
+  // Load Excel column mappings
+  useEffect(() => {
+    const loadColumnMappings = async () => {
+      if (user && user.type === 'admin') {
+        try {
+          setLoadingMappings(true);
+          const mappings = await api.getExcelColumnMappings();
+          setColumnMappings(mappings);
+        } catch (error) {
+          console.error('Failed to load column mappings:', error);
+        } finally {
+          setLoadingMappings(false);
+        }
+      }
+    };
+    loadColumnMappings();
+  }, [user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
@@ -174,6 +227,91 @@ export default function SystemSettingsPage() {
     return gradeCount * formData.class_letters.length;
   };
 
+  const handleWeightsChange = (key: string, value: number) => {
+    setPredictionWeights(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleSaveWeights = async () => {
+    const total = Object.values(predictionWeights).reduce((sum, val) => sum + val, 0);
+    if (Math.abs(total - 1.0) > 0.01) {
+      toast.error(`Сумма весов должна быть равна 1.0. Текущая сумма: ${total.toFixed(2)}`);
+      return;
+    }
+
+    setSavingWeights(true);
+    try {
+      await api.updatePredictionWeights({ weights: predictionWeights });
+      toast.success('Веса прогнозирования сохранены');
+    } catch (error: any) {
+      toast.error(error.message || 'Ошибка при сохранении весов');
+    } finally {
+      setSavingWeights(false);
+    }
+  };
+
+  const addColumnAlias = (fieldName: string) => {
+    if (!newAlias.trim()) {
+      toast.error('Введите название столбца');
+      return;
+    }
+
+    const mapping = columnMappings.find(m => m.field_name === fieldName);
+    if (mapping && mapping.column_aliases.includes(newAlias.trim())) {
+      toast.error('Этот алиас уже существует');
+      return;
+    }
+
+    if (mapping) {
+      setColumnMappings(prev => prev.map(m => 
+        m.field_name === fieldName
+          ? { ...m, column_aliases: [...m.column_aliases, newAlias.trim()] }
+          : m
+      ));
+    } else {
+      // Create new mapping
+      setColumnMappings(prev => [...prev, {
+        field_name: fieldName,
+        column_aliases: [newAlias.trim()],
+        is_active: 1
+      }]);
+    }
+    setNewAlias('');
+  };
+
+  const removeColumnAlias = (fieldName: string, alias: string) => {
+    setColumnMappings(prev => prev.map(m => 
+      m.field_name === fieldName
+        ? { ...m, column_aliases: m.column_aliases.filter(a => a !== alias) }
+        : m
+    ));
+  };
+
+  const handleSaveMappings = async () => {
+    try {
+      for (const mapping of columnMappings) {
+        if (mapping.id) {
+          await api.updateExcelColumnMapping(mapping.field_name, {
+            column_aliases: mapping.column_aliases
+          });
+        } else {
+          await api.createExcelColumnMapping({
+            field_name: mapping.field_name,
+            column_aliases: mapping.column_aliases
+          });
+        }
+      }
+      toast.success('Настройки маппинга столбцов сохранены');
+      // Reload mappings
+      const mappings = await api.getExcelColumnMappings();
+      setColumnMappings(mappings);
+    } catch (error: any) {
+      toast.error(error.message || 'Ошибка при сохранении маппинга');
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <PageContainer>
@@ -223,7 +361,7 @@ export default function SystemSettingsPage() {
         )}
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="general" className="flex items-center gap-2">
               <School className="h-4 w-4" />
               Основные
@@ -232,9 +370,17 @@ export default function SystemSettingsPage() {
               <GraduationCap className="h-4 w-4" />
               Классы
             </TabsTrigger>
+            <TabsTrigger value="predictions" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Прогнозы
+            </TabsTrigger>
+            <TabsTrigger value="excel" className="flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              Excel
+            </TabsTrigger>
             <TabsTrigger value="preview" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
-              Предварительный просмотр
+              Просмотр
             </TabsTrigger>
           </TabsList>
 
@@ -426,6 +572,258 @@ export default function SystemSettingsPage() {
                     ))}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Prediction Weights Tab */}
+          <TabsContent value="predictions" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Веса для расчета прогнозов
+                </CardTitle>
+                <CardDescription>
+                  Настройте веса для формулы прогнозирования успеваемости учащихся
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {loadingWeights ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Формула прогноза: P(Qn) = (w_prev × предыдущий_класс) + (w_teacher × учитель) + (w_quarters × среднее(Q1...Qn-1))
+                        <br />
+                        Сумма всех весов должна быть равна 1.0
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="weight_previous_class">
+                          Вес предыдущего класса (w_prev)
+                        </Label>
+                        <div className="flex items-center gap-4 mt-2">
+                          <Input
+                            id="weight_previous_class"
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={predictionWeights.previous_class}
+                            onChange={(e) => handleWeightsChange('previous_class', parseFloat(e.target.value) || 0)}
+                            className="w-32"
+                          />
+                          <div className="flex-1">
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={predictionWeights.previous_class}
+                              onChange={(e) => handleWeightsChange('previous_class', parseFloat(e.target.value))}
+                              className="w-full"
+                            />
+                          </div>
+                          <span className="text-sm text-muted-foreground w-12 text-right">
+                            {(predictionWeights.previous_class * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="weight_teacher">
+                          Вес оценки учителя (w_teacher)
+                        </Label>
+                        <div className="flex items-center gap-4 mt-2">
+                          <Input
+                            id="weight_teacher"
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={predictionWeights.teacher}
+                            onChange={(e) => handleWeightsChange('teacher', parseFloat(e.target.value) || 0)}
+                            className="w-32"
+                          />
+                          <div className="flex-1">
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={predictionWeights.teacher}
+                              onChange={(e) => handleWeightsChange('teacher', parseFloat(e.target.value))}
+                              className="w-full"
+                            />
+                          </div>
+                          <span className="text-sm text-muted-foreground w-12 text-right">
+                            {(predictionWeights.teacher * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="weight_quarters">
+                          Вес текущих четвертей (w_quarters)
+                        </Label>
+                        <div className="flex items-center gap-4 mt-2">
+                          <Input
+                            id="weight_quarters"
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={predictionWeights.quarters}
+                            onChange={(e) => handleWeightsChange('quarters', parseFloat(e.target.value) || 0)}
+                            className="w-32"
+                          />
+                          <div className="flex-1">
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={predictionWeights.quarters}
+                              onChange={(e) => handleWeightsChange('quarters', parseFloat(e.target.value))}
+                              className="w-full"
+                            />
+                          </div>
+                          <span className="text-sm text-muted-foreground w-12 text-right">
+                            {(predictionWeights.quarters * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                        <span className="font-medium">Сумма весов:</span>
+                        <span className={`font-bold ${Math.abs(Object.values(predictionWeights).reduce((a, b) => a + b, 0) - 1.0) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                          {Object.values(predictionWeights).reduce((a, b) => a + b, 0).toFixed(2)}
+                        </span>
+                      </div>
+
+                      <Button 
+                        onClick={handleSaveWeights} 
+                        disabled={savingWeights || Math.abs(Object.values(predictionWeights).reduce((a, b) => a + b, 0) - 1.0) > 0.01}
+                        className="w-full"
+                      >
+                        {savingWeights ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                            Сохранение...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Сохранить веса
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Excel Column Mapping Tab */}
+          <TabsContent value="excel" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileSpreadsheet className="h-5 w-5" />
+                  Настройка структуры Excel файлов
+                </CardTitle>
+                <CardDescription>
+                  Настройте названия столбцов для импорта оценок из Excel
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {loadingMappings ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Добавьте возможные названия столбцов для каждого поля. Система будет искать эти названия в Excel файлах (регистр не важен).
+                      </AlertDescription>
+                    </Alert>
+
+                    {['name', 'previous_class', 'q1', 'q2', 'q3', 'q4', 'teacher'].map((fieldName) => {
+                      const mapping = columnMappings.find(m => m.field_name === fieldName) || {
+                        field_name: fieldName,
+                        column_aliases: [],
+                        is_active: 1
+                      };
+                      const fieldLabels: Record<string, string> = {
+                        name: 'ФИО ученика',
+                        previous_class: 'Процент за предыдущий класс',
+                        q1: 'Q1 (Четверть 1)',
+                        q2: 'Q2 (Четверть 2)',
+                        q3: 'Q3 (Четверть 3)',
+                        q4: 'Q4 (Четверть 4)',
+                        teacher: 'Оценка учителя'
+                      };
+
+                      return (
+                        <div key={fieldName} className="space-y-3 p-4 border rounded-lg">
+                          <Label className="font-semibold">{fieldLabels[fieldName]}</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {mapping.column_aliases.map((alias: string) => (
+                              <Badge key={alias} variant="secondary" className="flex items-center gap-2">
+                                {alias}
+                                <button
+                                  onClick={() => removeColumnAlias(fieldName, alias)}
+                                  className="hover:bg-destructive/20 rounded-full p-0.5"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="flex gap-2">
+                            <Input
+                              value={editingMapping === fieldName ? newAlias : ''}
+                              onChange={(e) => setNewAlias(e.target.value)}
+                              onFocus={() => setEditingMapping(fieldName)}
+                              placeholder="Введите название столбца"
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter' && editingMapping === fieldName) {
+                                  addColumnAlias(fieldName);
+                                }
+                              }}
+                            />
+                            <Button
+                              onClick={() => addColumnAlias(fieldName)}
+                              disabled={!newAlias.trim() || editingMapping !== fieldName}
+                              size="sm"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <Separator />
+
+                    <Button onClick={handleSaveMappings} className="w-full">
+                      <Save className="h-4 w-4 mr-2" />
+                      Сохранить настройки маппинга
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

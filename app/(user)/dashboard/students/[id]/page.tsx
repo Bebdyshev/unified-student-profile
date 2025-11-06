@@ -309,27 +309,85 @@ export default function StudentProfilePage() {
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <h5 className="text-sm font-medium mb-2">Фактические оценки:</h5>
-                            <div className="flex gap-2">
-                              {score.actual_scores.map((grade, idx) => (
-                                <Badge key={idx} variant="outline">
-                                  Q{idx + 1}: {grade > 0 ? `${grade}%` : 'Н/А'}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <h5 className="text-sm font-medium mb-2">Прогнозируемые оценки:</h5>
-                            <div className="flex gap-2">
-                              {score.predicted_scores.map((grade, idx) => (
-                                <Badge key={idx} variant="secondary">
-                                  Q{idx + 1}: {grade > 0 ? `${grade}%` : 'Н/А'}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
+                        {/* Quarterly Predictions Table */}
+                        <div className="overflow-x-auto mt-4">
+                          <table className="w-full border-collapse text-sm">
+                            <thead>
+                              <tr className="bg-muted">
+                                <th className="border px-3 py-2 text-left">ФИО</th>
+                                <th className="border px-3 py-2 text-center">Оценка учителя, %</th>
+                                <th className="border px-3 py-2 text-center">Процент за 1 предыдущий класс</th>
+                                <th className="border px-3 py-2 text-center">Q1</th>
+                                <th className="border px-3 py-2 text-center">Q2</th>
+                                <th className="border px-3 py-2 text-center">Q3</th>
+                                <th className="border px-3 py-2 text-center">Q4</th>
+                                <th className="border px-3 py-2 text-center">Высчитанный предикт</th>
+                                <th className="border px-3 py-2 text-center">Реальный процент</th>
+                                <th className="border px-3 py-2 text-center">Динамика (+/-)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className="border px-3 py-2 font-medium">{student.name}</td>
+                                <td className="border px-3 py-2 text-center">
+                                  {score.teacher_name ? 'Есть' : 'Н/Д'}
+                                </td>
+                                <td className="border px-3 py-2 text-center">
+                                  {score.previous_class_score !== null && score.previous_class_score !== undefined 
+                                    ? `${score.previous_class_score.toFixed(1)}%` 
+                                    : 'Н/Д'}
+                                </td>
+                                {[0, 1, 2, 3].map((quarterIdx) => {
+                                  const actual = score.actual_scores?.[quarterIdx] || 0;
+                                  const predicted = score.predicted_scores?.[quarterIdx] || 0;
+                                  const hasActual = actual > 0;
+                                  const diff = hasActual ? (actual - predicted).toFixed(1) : null;
+                                  
+                                  return (
+                                    <td key={quarterIdx} className="border px-3 py-2 text-center">
+                                      <div className="space-y-1">
+                                        <div className={`font-medium ${hasActual ? 'text-green-600' : 'text-muted-foreground'}`}>
+                                          {hasActual ? `${actual.toFixed(1)}%` : 'Н/Д'}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Прогноз: {predicted > 0 ? `${predicted.toFixed(1)}%` : 'Н/Д'}
+                                        </div>
+                                        {diff && (
+                                          <div className={`text-xs font-semibold ${parseFloat(diff) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {parseFloat(diff) >= 0 ? '+' : ''}{diff}%
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                  );
+                                })}
+                                <td className="border px-3 py-2 text-center">
+                                  {score.predicted_scores && score.predicted_scores.length > 0
+                                    ? `${(score.predicted_scores.reduce((a: number, b: number) => a + b, 0) / score.predicted_scores.length).toFixed(1)}%`
+                                    : 'Н/Д'}
+                                </td>
+                                <td className="border px-3 py-2 text-center">
+                                  {score.actual_scores && score.actual_scores.length > 0
+                                    ? (() => {
+                                        const validScores = score.actual_scores.filter((s: number) => s > 0);
+                                        return validScores.length > 0
+                                          ? `${(validScores.reduce((a: number, b: number) => a + b, 0) / validScores.length).toFixed(1)}%`
+                                          : 'Н/Д';
+                                      })()
+                                    : 'Н/Д'}
+                                </td>
+                                <td className="border px-3 py-2 text-center">
+                                  {score.delta_percentage !== null && score.delta_percentage !== undefined
+                                    ? (
+                                        <span className={`font-semibold ${score.delta_percentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                          {score.delta_percentage >= 0 ? '+' : ''}{score.delta_percentage.toFixed(1)}%
+                                        </span>
+                                      )
+                                    : 'Н/Д'}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     ))}
