@@ -241,6 +241,7 @@ export interface StudentScore {
   student_id: number;
   grade_id: number;
   subgroup_id?: number;
+  previous_class_score?: number | null;
 }
 
 export interface DisciplineStatistics {

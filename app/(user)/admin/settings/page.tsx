@@ -272,7 +272,7 @@ export default function SystemSettingsPage() {
   const removeColumnAlias = (fieldName: string, alias: string) => {
     setColumnMappings(prev => prev.map(m => 
       m.field_name === fieldName
-        ? { ...m, column_aliases: m.column_aliases.filter(a => a !== alias) }
+        ? { ...m, column_aliases: m.column_aliases.filter((a: string) => a !== alias) }
         : m
     ));
   };
