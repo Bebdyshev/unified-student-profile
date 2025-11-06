@@ -207,6 +207,29 @@ export default function SubjectsPage() {
                 <Label htmlFor="edit-subj-desc">Описание (необязательно)</Label>
                 <Input id="edit-subj-desc" value={form.description || ''} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
               </div>
+              <div className="flex flex-col gap-2">
+                <Label>Параллели (7–12)</Label>
+                <div className="grid grid-cols-6 gap-2">
+                  {Array.from({ length: 6 }, (_, i) => i + 7).map((g) => {
+                    const active = form.applicable_parallels.includes(g);
+                    return (
+                      <Button
+                        key={g}
+                        type="button"
+                        variant={active ? 'default' : 'outline'}
+                        onClick={() => setForm((p) => ({
+                          ...p,
+                          applicable_parallels: active
+                            ? p.applicable_parallels.filter((x) => x !== g)
+                            : [...p.applicable_parallels, g].sort((a, b) => a - b)
+                        }))}
+                      >
+                        {g}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsEditOpen(false)}>Отмена</Button>

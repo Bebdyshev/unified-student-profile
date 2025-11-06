@@ -894,7 +894,7 @@ class ApiService {
     }
   }
 
-  async createSubject(subjectData: { name: string; description?: string }): Promise<{ id: number; message: string }> {
+  async createSubject(subjectData: { name: string; description?: string; applicable_parallels?: number[] }): Promise<{ id: number; message: string }> {
     try {
       const response = await apiClient.post('/subjects/', subjectData);
       return response.data;
@@ -903,7 +903,7 @@ class ApiService {
     }
   }
 
-  async updateSubject(subjectId: number, subjectData: { name?: string; description?: string; is_active?: number }): Promise<{ message: string }> {
+  async updateSubject(subjectId: number, subjectData: { name?: string; description?: string; is_active?: number; applicable_parallels?: number[] }): Promise<{ message: string }> {
     try {
       const response = await apiClient.put(`/subjects/${subjectId}`, subjectData);
       return response.data;
