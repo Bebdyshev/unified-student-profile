@@ -57,7 +57,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Настройки',
-    url: '/dashboard/settings',
+    url: '/admin/settings',
     icon: 'settings'
   }
 ]; 
