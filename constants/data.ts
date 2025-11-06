@@ -152,7 +152,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Настройки системы',
-    url: '/settings',
+    url: '/dashboard/settings',
     icon: 'settings',
     isActive: false,
     items: []
