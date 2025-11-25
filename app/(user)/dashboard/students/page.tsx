@@ -8,12 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Search, 
-  User, 
-  Eye, 
-  GraduationCap, 
-  AlertTriangle, 
+import {
+  Search,
+  User,
+  Eye,
+  GraduationCap,
+  AlertTriangle,
   Users,
   Filter,
   UserCheck
@@ -26,7 +26,7 @@ import type { Student, Grade, Subgroup } from '@/types';
 
 const DANGER_LEVEL_COLORS = {
   0: 'bg-green-100 text-green-800',
-  1: 'bg-yellow-100 text-yellow-800', 
+  1: 'bg-yellow-100 text-yellow-800',
   2: 'bg-orange-100 text-orange-800',
   3: 'bg-red-100 text-red-800'
 };
@@ -34,7 +34,7 @@ const DANGER_LEVEL_COLORS = {
 const DANGER_LEVEL_NAMES = {
   0: 'Низкий',
   1: 'Умеренный',
-  2: 'Высокий', 
+  2: 'Высокий',
   3: 'Критический'
 };
 
@@ -48,7 +48,7 @@ interface StudentWithGrade extends Student {
 export default function StudentsPage() {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
-  
+
   const [students, setStudents] = useState<StudentWithGrade[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<StudentWithGrade[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -56,6 +56,15 @@ export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedDangerLevel, setSelectedDangerLevel] = useState<string>('all');
+
+  // Read danger level from URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const dangerParam = params.get('danger');
+    if (dangerParam && ['0', '1', '2', '3'].includes(dangerParam)) {
+      setSelectedDangerLevel(dangerParam);
+    }
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -73,23 +82,23 @@ export default function StudentsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       // Get all grades and students data
       const [gradesData, classData] = await Promise.all([
         api.getAllGrades(),
         api.getAllClassData()
       ]);
-      
+
       setGrades(gradesData);
-      
+
       // Transform class data to student list with additional info
       const allStudents: StudentWithGrade[] = [];
-      
+
       if (classData.class_data) {
         classData.class_data.forEach((classInfo: any) => {
           classInfo.class.forEach((student: any) => {
             const gradeInfo = gradesData.find(g => g.grade === student.class_liter);
-            
+
             allStudents.push({
               id: student.id,
               name: student.student_name,
@@ -104,15 +113,13 @@ export default function StudentsPage() {
               subgroup_id: undefined,
               user_id: undefined,
               grade_info: gradeInfo,
-              average_score: student.actual_score?.length > 0 
-                ? Math.round((student.actual_score.reduce((sum: number, score: number) => sum + score, 0) / student.actual_score.length) * 10) / 10 
-                : 0,
+              average_score: student.avg_percentage || 0, // Use backend-calculated average
               danger_level: student.danger_level || 0
             });
           });
         });
       }
-      
+
       setStudents(allStudents);
     } catch (error: any) {
       const normalized = (error && error.isApiError) ? error : handleApiError(error);
@@ -126,7 +133,7 @@ export default function StudentsPage() {
           const data = error?.response?.data;
           console.error('Failed to fetch students data (raw status):', status);
           if (data) console.error('Failed to fetch students data (raw data):', data);
-        } catch {}
+        } catch { }
         console.error('Failed to fetch students data (normalized):', normalized);
         toast.error(normalized.message || 'Не удалось загрузить данные студентов');
       }
@@ -141,7 +148,7 @@ export default function StudentsPage() {
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(student => 
+      filtered = filtered.filter(student =>
         student.name.toLowerCase().includes(query) ||
         (student.email && student.email.toLowerCase().includes(query)) ||
         (student.student_id_number && student.student_id_number.toLowerCase().includes(query))
@@ -150,7 +157,7 @@ export default function StudentsPage() {
 
     // Filter by grade
     if (selectedGrade !== 'all') {
-      filtered = filtered.filter(student => 
+      filtered = filtered.filter(student =>
         student.grade_info && `${student.grade_info.grade}_${student.grade_info.parallel}` === selectedGrade
       );
     }
@@ -328,7 +335,7 @@ export default function StudentsPage() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-3">
                       {student.average_score !== undefined && (
                         <Badge variant="outline">

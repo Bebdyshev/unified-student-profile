@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Pencil, Trash2, Plus, Users, BarChart3, GraduationCap, Upload } from 'lucide-react';
+import { Pencil, Trash2, Plus, Users, BarChart3, GraduationCap, Upload, Eye } from 'lucide-react';
 import api, { Grade as ApiGrade } from '@/lib/api';
 import { ApiError } from '@/utils/errorHandler';
 import StudentManagement from './_components/student-management';
@@ -58,6 +58,7 @@ interface CreateGradePayload {
 }
 
 export default function ClassManagementPage() {
+  const router = useRouter(); // Initialize router
   const [grades, setGrades] = useState<LocalGrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +84,7 @@ export default function ClassManagementPage() {
     for (const className of availableClasses) {
       const matchesParallel = className.trim().startsWith(String(selectedParallel));
       if (!matchesParallel) continue;
-      const letterMatch = className.replace(/^\d+\s*/,'').match(/[A-Za-zА-Яа-яЁё]+/);
+      const letterMatch = className.replace(/^\d+\s*/, '').match(/[A-Za-zА-Яа-яЁё]+/);
       if (letterMatch && letterMatch[0]) {
         lettersSet.add(letterMatch[0]);
       }
@@ -122,11 +123,11 @@ export default function ClassManagementPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
-    
+
     if (type === 'number') {
-      setFormData(prev => ({ 
-        ...prev, 
-        [name]: value === '' ? 0 : parseInt(value, 10) 
+      setFormData(prev => ({
+        ...prev,
+        [name]: value === '' ? 0 : parseInt(value, 10)
       }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -173,7 +174,7 @@ export default function ClassManagementPage() {
 
   const handleUpdateGrade = async () => {
     if (!currentGrade) return;
-    
+
     try {
       await api.updateGrade(currentGrade.id, formData as any);
       toast.success('Класс успешно обновлен');
@@ -193,7 +194,7 @@ export default function ClassManagementPage() {
 
   const handleDeleteGrade = async () => {
     if (!currentGrade) return;
-    
+
     try {
       await api.deleteGrade(currentGrade.id);
       toast.success('Класс успешно удален');
@@ -250,7 +251,7 @@ export default function ClassManagementPage() {
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Управление классами</h2>
               <div className="flex items-center gap-2">
-                <UploadScores 
+                <UploadScores
                   onUploadComplete={fetchGrades}
                   trigger={
                     <Button variant="outline" className="flex items-center gap-2">
@@ -329,18 +330,27 @@ export default function ClassManagementPage() {
                               )}
                             </td>
                             <td className="p-3 border-b border-gray-200 text-right space-x-2">
-                              <Button 
-                                variant="outline" 
-                                size="icon" 
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => router.push(`/dashboard/classes/${grade.id}`)}
+                                className="h-8 w-8 inline-flex items-center justify-center"
+                                title="Просмотр"
+                              >
+                                <Eye size={16} />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
                                 onClick={() => handleEditClick(grade)}
                                 className="h-8 w-8 inline-flex items-center justify-center"
                                 title="Редактировать"
                               >
                                 <Pencil size={16} />
                               </Button>
-                              <Button 
-                                variant="outline" 
-                                size="icon" 
+                              <Button
+                                variant="outline"
+                                size="icon"
                                 onClick={() => handleDeleteClick(grade)}
                                 className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 inline-flex items-center justify-center"
                                 title="Удалить"
@@ -359,7 +369,7 @@ export default function ClassManagementPage() {
           </TabsContent>
 
           <TabsContent value="students">
-            <StudentManagement 
+            <StudentManagement
               grades={grades.map(g => ({
                 id: g.id,
                 grade: g.grade,
@@ -368,13 +378,13 @@ export default function ClassManagementPage() {
                 shanyrak: g.curator_info?.shanyrak || '',
                 studentCount: g.student_count,
                 actualStudentCount: g.actual_student_count
-              }))} 
-              onRefreshGrades={fetchGrades} 
+              }))}
+              onRefreshGrades={fetchGrades}
             />
           </TabsContent>
 
           <TabsContent value="analytics">
-            <AnalyticsOverview 
+            <AnalyticsOverview
               grades={grades.map(g => ({
                 id: g.id,
                 grade: g.grade,
@@ -383,11 +393,11 @@ export default function ClassManagementPage() {
                 shanyrak: g.curator_info?.shanyrak || '',
                 studentCount: g.student_count,
                 actualStudentCount: g.actual_student_count
-              }))} 
+              }))}
             />
           </TabsContent>
 
-          
+
         </Tabs>
 
         {/* Create Dialog */}
@@ -457,8 +467,8 @@ export default function ClassManagementPage() {
                   onValueChange={(value) => {
                     const curatorId = value && value !== 'none' ? parseInt(value) : undefined;
                     const curator = curators.find(c => c.id === curatorId);
-                    setFormData(prev => ({ 
-                      ...prev, 
+                    setFormData(prev => ({
+                      ...prev,
                       curator_id: curatorId,
                       curator_name: curator?.name
                     }));
@@ -491,8 +501,8 @@ export default function ClassManagementPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setIsCreateDialogOpen(false)}
               >
                 Отмена
@@ -539,8 +549,8 @@ export default function ClassManagementPage() {
                   onValueChange={(value) => {
                     const curatorId = value && value !== 'none' ? parseInt(value) : undefined;
                     const curator = curators.find(c => c.id === curatorId);
-                    setFormData(prev => ({ 
-                      ...prev, 
+                    setFormData(prev => ({
+                      ...prev,
                       curator_id: curatorId,
                       curator_name: curator?.name
                     }));
@@ -572,8 +582,8 @@ export default function ClassManagementPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setIsEditDialogOpen(false)}
               >
                 Отмена
@@ -593,14 +603,14 @@ export default function ClassManagementPage() {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setIsDeleteDialogOpen(false)}
               >
                 Отмена
               </Button>
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 onClick={handleDeleteGrade}
               >
                 Удалить

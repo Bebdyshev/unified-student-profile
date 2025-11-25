@@ -32,20 +32,20 @@ apiClient.interceptors.response.use(
     // Handle 401 Unauthorized errors globally
     if (error.response && error.response.status === 401) {
       // Check if we're not already on the login page
-      if (typeof window !== 'undefined' && 
-          !window.location.pathname.includes('/signin') && 
-          !window.location.pathname.includes('/signup')) {
-        
+      if (typeof window !== 'undefined' &&
+        !window.location.pathname.includes('/signin') &&
+        !window.location.pathname.includes('/signup')) {
+
         // Clear token
         localStorage.removeItem('access_token');
-        
+
         // Redirect to login page
         window.location.href = '/signin';
         // Preserve the original AxiosError to avoid losing non-enumerable props
         return Promise.reject(error);
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -270,7 +270,7 @@ export interface AvailableClassesResponse {
 
 class ApiService {
   // ==================== AUTH ENDPOINTS ====================
-  
+
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
       const response: AxiosResponse<AuthResponse> = await apiClient.post('/auth/login', credentials);
@@ -307,7 +307,7 @@ class ApiService {
   }
 
   // ==================== USER MANAGEMENT ====================
-  
+
   async getUsers(): Promise<User[]> {
     try {
       const response: AxiosResponse<User[]> = await apiClient.get('/users/');
@@ -344,7 +344,7 @@ class ApiService {
   }
 
   // ==================== DASHBOARD ====================
-  
+
   async getDangerLevels(): Promise<DashboardResponse> {
     try {
       const response: AxiosResponse<DashboardResponse> = await apiClient.get('/dashboard/danger-levels');
@@ -364,7 +364,7 @@ class ApiService {
   }
 
   // ==================== GRADES & CLASSES ====================
-  
+
   async getGrades(): Promise<Grade[]> {
     try {
       const response: AxiosResponse<Grade[]> = await apiClient.get('/grades/');
@@ -395,6 +395,15 @@ class ApiService {
   async updateGrade(gradeId: number, gradeData: UpdateGradeRequest): Promise<Grade> {
     try {
       const response: AxiosResponse<Grade> = await apiClient.put(`/grades/${gradeId}`, gradeData);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async getGradeById(gradeId: number): Promise<import('@/types').Grade> {
+    try {
+      const response: AxiosResponse<import('@/types').Grade> = await apiClient.get(`/grades/${gradeId}`);
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -476,10 +485,10 @@ class ApiService {
   }
 
   // ==================== STUDENTS ====================
-  
+
   async getStudents(): Promise<Student[]> {
     try {
-      const response: AxiosResponse<Student[]> = await apiClient.get('/students/');
+      const response: AxiosResponse<Student[]> = await apiClient.get('/grades/students/');
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -503,7 +512,7 @@ class ApiService {
 
   async updateStudent(studentId: number, studentData: UpdateStudentRequest): Promise<Student> {
     try {
-      const response: AxiosResponse<Student> = await apiClient.put(`/students/${studentId}`, studentData);
+      const response: AxiosResponse<Student> = await apiClient.put(`/grades/students/${studentId}`, studentData);
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -528,18 +537,18 @@ class ApiService {
   }
 
   // ==================== FILE UPLOAD ====================
-  
+
   async uploadFile(file: File, endpoint: string): Promise<any> {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await apiClient.post(endpoint, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -553,13 +562,13 @@ class ApiService {
       formData.append('curator', curator);
       formData.append('subject', subject);
       formData.append('file', file);
-      
+
       const response = await apiClient.post('/grades/send/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
-      
+
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -567,7 +576,7 @@ class ApiService {
   }
 
   // ==================== ANALYTICS ====================
-  
+
   async getAnalytics(): Promise<AnalyticsData[]> {
     try {
       const dangerLevels = [1, 2, 3];
@@ -594,7 +603,7 @@ class ApiService {
   }
 
   // ==================== SYSTEM SETTINGS ====================
-  
+
   async getSystemSettings(): Promise<SystemSettings> {
     try {
       const response: AxiosResponse<SystemSettings> = await apiClient.get('/settings/');
@@ -1059,11 +1068,11 @@ class ApiService {
   async getStudentProfile(studentId: number): Promise<import('@/types').StudentProfile> {
     try {
       // Get student basic info
-      const studentResponse = await apiClient.get(`/students/${studentId}`);
+      const studentResponse = await apiClient.get(`/grades/student/${studentId}`);
       const student = studentResponse.data;
 
       // Get student scores
-      const scoresResponse = await apiClient.get(`/grades/student/${studentId}`);
+      const scoresResponse = await apiClient.get(`/grades/student/${studentId}/scores`);
       const scores = scoresResponse.data;
 
       // Get disciplinary actions

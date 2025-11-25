@@ -9,15 +9,16 @@ interface DangerousClass {
 
 interface ClassTableProps {
   dangerousClasses: DangerousClass[];
+  gradeIdMap: Map<string, number>;
 }
 
-const TableContainer: FC<ClassTableProps> = ({ dangerousClasses }) => {
+const TableContainer: FC<ClassTableProps> = ({ dangerousClasses, gradeIdMap }) => {
   return (
     <div className="h-full flex flex-col">
       <div className="text-lg font-semibold mb-3 mt-3 text-center">
         Классы по уровню опасности
       </div>
-      
+
       <div className="overflow-y-auto flex-1">
         <table className="w-full table-auto border-collapse">
           <thead className="bg-white">
@@ -30,10 +31,10 @@ const TableContainer: FC<ClassTableProps> = ({ dangerousClasses }) => {
           <tbody>
             {dangerousClasses.map((item, index) => (
               <tr key={index} className="hover:bg-gray-100">
-                <td className="px-4 py-2 border">{index+1}</td>
+                <td className="px-4 py-2 border">{index + 1}</td>
                 <td className="px-4 py-2 border">
-                  <Link 
-                    href={`/c/class?class=${item.grade.toLowerCase()}`} 
+                  <Link
+                    href={`/dashboard/classes/${gradeIdMap.get(item.grade) || '#'}`}
                     className="text-blue-600 hover:underline"
                   >
                     {item.grade}
@@ -43,14 +44,13 @@ const TableContainer: FC<ClassTableProps> = ({ dangerousClasses }) => {
                   <div className="flex items-center">
                     <span className="mr-2 w-10 text-right">{item.avg_danger_level.toFixed(2)}</span>
                     <div className="w-[100px] bg-gray-200 rounded-full h-2.5 flex-shrink-0">
-                      <div 
-                        className={`h-2.5 ${
-                          item.avg_danger_level >= 2.5 ? 'bg-red-500' : 
-                          item.avg_danger_level >= 1.5 ? 'bg-yellow-500' : 'bg-orange-500'
-                        }`}
-                        style={{ 
-                          width: `${Math.min(100, (item.avg_danger_level / 3) * 100)}%`, 
-                          borderRadius: '9999px' 
+                      <div
+                        className={`h-2.5 ${item.avg_danger_level >= 2.5 ? 'bg-red-500' :
+                            item.avg_danger_level >= 1.5 ? 'bg-yellow-500' : 'bg-orange-500'
+                          }`}
+                        style={{
+                          width: `${Math.min(100, (item.avg_danger_level / 3) * 100)}%`,
+                          borderRadius: '9999px'
                         }}
                       ></div>
                     </div>

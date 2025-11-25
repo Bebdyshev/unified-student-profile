@@ -8,13 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  ArrowLeft, 
-  User, 
-  GraduationCap, 
-  TrendingDown, 
-  TrendingUp, 
-  Award, 
+import {
+  ArrowLeft,
+  User,
+  GraduationCap,
+  TrendingDown,
+  TrendingUp,
+  Award,
   AlertTriangle,
   Calendar,
   Mail,
@@ -27,10 +27,12 @@ import {
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import type { StudentProfile, DisciplinaryAction, Achievement, StudentScore } from '@/types';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 
 const DANGER_LEVEL_COLORS = {
   0: 'bg-green-500',
-  1: 'bg-yellow-500', 
+  1: 'bg-yellow-500',
   2: 'bg-orange-500',
   3: 'bg-red-500'
 };
@@ -38,7 +40,7 @@ const DANGER_LEVEL_COLORS = {
 const DANGER_LEVEL_NAMES = {
   0: 'Низкий',
   1: 'Умеренный',
-  2: 'Высокий', 
+  2: 'Высокий',
   3: 'Критический'
 };
 
@@ -256,8 +258,12 @@ export default function StudentProfilePage() {
         </Card>
 
         {/* Detailed Information Tabs */}
-        <Tabs defaultValue="grades" className="space-y-4">
+        <Tabs defaultValue="dynamics" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="dynamics" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Динамика
+            </TabsTrigger>
             <TabsTrigger value="grades" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
               Оценки ({student.scores.length})
@@ -271,6 +277,125 @@ export default function StudentProfilePage() {
               Дисциплина ({student.disciplinary_actions.length})
             </TabsTrigger>
           </TabsList>
+
+          {/* Dynamics Tab */}
+          <TabsContent value="dynamics" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>График динамики успеваемости</CardTitle>
+                <CardDescription>
+                  Сравнение фактических и прогнозируемых оценок по четвертям
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {student.scores.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    Нет данных для отображения
+                  </p>
+                ) : (
+                  <div className="space-y-6">
+                    {student.scores.map((score) => {
+                      const chartData = [
+                        {
+                          quarter: 'Q1',
+                          actual: score.actual_scores[0] || 0,
+                          predicted: score.predicted_scores[0] || 0,
+                        },
+                        {
+                          quarter: 'Q2',
+                          actual: score.actual_scores[1] || 0,
+                          predicted: score.predicted_scores[1] || 0,
+                        },
+                        {
+                          quarter: 'Q3',
+                          actual: score.actual_scores[2] || 0,
+                          predicted: score.predicted_scores[2] || 0,
+                        },
+                        {
+                          quarter: 'Q4',
+                          actual: score.actual_scores[3] || 0,
+                          predicted: score.predicted_scores[3] || 0,
+                        },
+                      ];
+
+                      return (
+                        <div key={score.id} className="border rounded-lg p-4">
+                          <div className="mb-4">
+                            <h4 className="font-medium text-lg">{score.subject_name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Учитель: {score.teacher_name} • Семестр: {score.semester}
+                            </p>
+                          </div>
+
+                          <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis
+                                  dataKey="quarter"
+                                  label={{ value: 'Четверть', position: 'insideBottom', offset: -5 }}
+                                />
+                                <YAxis
+                                  label={{ value: 'Оценка (%)', angle: -90, position: 'insideLeft' }}
+                                  domain={[0, 100]}
+                                />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', border: '1px solid #ccc' }}
+                                  formatter={(value: any) => `${value}%`}
+                                />
+                                <Legend />
+                                <Line
+                                  type="monotone"
+                                  dataKey="actual"
+                                  stroke="#10b981"
+                                  strokeWidth={2}
+                                  name="Фактическая оценка"
+                                  dot={{ fill: '#10b981', r: 5 }}
+                                  activeDot={{ r: 7 }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="predicted"
+                                  stroke="#3b82f6"
+                                  strokeWidth={2}
+                                  strokeDasharray="5 5"
+                                  name="Прогнозируемая оценка"
+                                  dot={{ fill: '#3b82f6', r: 5 }}
+                                  activeDot={{ r: 7 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="font-medium">Средняя фактическая:</span>
+                              <span className="ml-2">
+                                {(() => {
+                                  const validScores = score.actual_scores.filter(s => s > 0);
+                                  return validScores.length > 0
+                                    ? `${(validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1)}%`
+                                    : 'Н/Д';
+                                })()}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-medium">Средняя прогноз:</span>
+                              <span className="ml-2">
+                                {score.predicted_scores.length > 0
+                                  ? `${(score.predicted_scores.reduce((a, b) => a + b, 0) / score.predicted_scores.length).toFixed(1)}%`
+                                  : 'Н/Д'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Grades Tab */}
           <TabsContent value="grades" className="space-y-4">
@@ -308,7 +433,7 @@ export default function StudentProfilePage() {
                             )}
                           </div>
                         </div>
-                        
+
                         {/* Quarterly Predictions Table */}
                         <div className="overflow-x-auto mt-4">
                           <table className="w-full border-collapse text-sm">
@@ -330,11 +455,18 @@ export default function StudentProfilePage() {
                               <tr>
                                 <td className="border px-3 py-2 font-medium">{student.name}</td>
                                 <td className="border px-3 py-2 text-center">
-                                  {score.teacher_name ? 'Есть' : 'Н/Д'}
+                                  {(() => {
+                                    const validScores = score.actual_scores?.filter((s: number) => s > 0) || [];
+                                    if (validScores.length > 0) {
+                                      const avg = validScores.reduce((a: number, b: number) => a + b, 0) / validScores.length;
+                                      return `${avg.toFixed(1)}%`;
+                                    }
+                                    return 'Н/Д';
+                                  })()}
                                 </td>
                                 <td className="border px-3 py-2 text-center">
-                                  {score.previous_class_score !== null && score.previous_class_score !== undefined 
-                                    ? `${score.previous_class_score.toFixed(1)}%` 
+                                  {score.previous_class_score !== null && score.previous_class_score !== undefined
+                                    ? `${score.previous_class_score.toFixed(1)}%`
                                     : 'Н/Д'}
                                 </td>
                                 {[0, 1, 2, 3].map((quarterIdx) => {
@@ -342,7 +474,7 @@ export default function StudentProfilePage() {
                                   const predicted = score.predicted_scores?.[quarterIdx] || 0;
                                   const hasActual = actual > 0;
                                   const diff = hasActual ? (actual - predicted).toFixed(1) : null;
-                                  
+
                                   return (
                                     <td key={quarterIdx} className="border px-3 py-2 text-center">
                                       <div className="space-y-1">
@@ -369,20 +501,20 @@ export default function StudentProfilePage() {
                                 <td className="border px-3 py-2 text-center">
                                   {score.actual_scores && score.actual_scores.length > 0
                                     ? (() => {
-                                        const validScores = score.actual_scores.filter((s: number) => s > 0);
-                                        return validScores.length > 0
-                                          ? `${(validScores.reduce((a: number, b: number) => a + b, 0) / validScores.length).toFixed(1)}%`
-                                          : 'Н/Д';
-                                      })()
+                                      const validScores = score.actual_scores.filter((s: number) => s > 0);
+                                      return validScores.length > 0
+                                        ? `${(validScores.reduce((a: number, b: number) => a + b, 0) / validScores.length).toFixed(1)}%`
+                                        : 'Н/Д';
+                                    })()
                                     : 'Н/Д'}
                                 </td>
                                 <td className="border px-3 py-2 text-center">
                                   {score.delta_percentage !== null && score.delta_percentage !== undefined
                                     ? (
-                                        <span className={`font-semibold ${score.delta_percentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                          {score.delta_percentage >= 0 ? '+' : ''}{score.delta_percentage.toFixed(1)}%
-                                        </span>
-                                      )
+                                      <span className={`font-semibold ${score.delta_percentage >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {score.delta_percentage >= 0 ? '+' : ''}{score.delta_percentage.toFixed(1)}%
+                                      </span>
+                                    )
                                     : 'Н/Д'}
                                 </td>
                               </tr>
@@ -493,7 +625,7 @@ export default function StudentProfilePage() {
                             </div>
                           </div>
                         </div>
-                        
+
                         {action.resolution_notes && (
                           <div className="mt-3 p-3 bg-muted rounded">
                             <h5 className="text-sm font-medium mb-1">Примечания к решению:</h5>

@@ -31,6 +31,7 @@ interface ClassDangerPercentage {
 interface ClassTableProps {
   dangerousClasses: DangerousClass[];
   classDangerPercentages?: ClassDangerPercentage[];
+  gradeIdMap: Map<string, number>;
 }
 
 const COLORS = [
@@ -39,34 +40,34 @@ const COLORS = [
 
 const getColor = (index: number) => COLORS[index % COLORS.length];
 
-const ChartContainer: FC<ClassTableProps> = ({ dangerousClasses, classDangerPercentages = [] }) => {
+const ChartContainer: FC<ClassTableProps> = ({ dangerousClasses, classDangerPercentages = [], gradeIdMap }) => {
   const [selectedGradeNumber, setSelectedGradeNumber] = useState<string | null>(null);
   const [selectedDangerLevel, setSelectedDangerLevel] = useState<string>("all");
 
   const gradeNumbers = useMemo(() => {
     if (!classDangerPercentages.length) return [];
-    
+
     const gradeSet = new Set<string>();
-    
+
     classDangerPercentages.forEach(item => {
       const match = item.grade.match(/^\d+/);
       if (match) {
         gradeSet.add(match[0]);
       }
     });
-    
+
     return Array.from(gradeSet).sort((a, b) => Number(a) - Number(b));
   }, [classDangerPercentages]);
 
   const chartData = useMemo(() => {
     if (!classDangerPercentages.length) return null;
 
-    let filteredClasses = selectedGradeNumber 
+    let filteredClasses = selectedGradeNumber
       ? classDangerPercentages.filter(item => item.grade.startsWith(selectedGradeNumber))
       : classDangerPercentages;
-    
+
     filteredClasses = filteredClasses.sort((a, b) => a.grade.localeCompare(b.grade));
-    
+
     if (selectedDangerLevel === "all") {
       return {
         labels: filteredClasses.map(item => item.grade),
@@ -93,8 +94,8 @@ const ChartContainer: FC<ClassTableProps> = ({ dangerousClasses, classDangerPerc
     if (selectedDangerLevel === "all") {
       return "Общий процент опасности";
     } else {
-      const level = selectedDangerLevel === "3" ? "высокого" : 
-                    selectedDangerLevel === "2" ? "среднего" : "низкого";
+      const level = selectedDangerLevel === "3" ? "высокого" :
+        selectedDangerLevel === "2" ? "среднего" : "низкого";
       return `Процент ${level} уровня опасности`;
     }
   }, [selectedDangerLevel]);
@@ -110,17 +111,20 @@ const ChartContainer: FC<ClassTableProps> = ({ dangerousClasses, classDangerPerc
   const router = useRouter();
 
   const handleClassClick = (className: string) => {
-    router.push(`/c/class?class=${className.toLowerCase()}`);
+    const gradeId = gradeIdMap.get(className);
+    if (gradeId) {
+      router.push(`/dashboard/classes/${gradeId}`);
+    }
   };
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex justify-center gap-4 mb-4">
-        <Select 
+        <Select
           onValueChange={(value) => {
             console.log("Selected value:", value);
             setSelectedGradeNumber(value === 'all' ? null : value);
-          }} 
+          }}
           value={selectedGradeNumber ?? "all"}
         >
           <SelectTrigger className="w-[40%]">
@@ -134,8 +138,8 @@ const ChartContainer: FC<ClassTableProps> = ({ dangerousClasses, classDangerPerc
           </SelectContent>
         </Select>
 
-        <Select 
-          onValueChange={(value) => setSelectedDangerLevel(value)} 
+        <Select
+          onValueChange={(value) => setSelectedDangerLevel(value)}
           value={selectedDangerLevel}
         >
           <SelectTrigger className="w-[40%]">
