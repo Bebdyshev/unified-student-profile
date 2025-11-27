@@ -153,7 +153,10 @@ export interface UpdateGradeRequest {
 export interface DangerLevelStats {
   [key: number]: {
     student_count: number;
+    avg_delta_percentage: number;
   };
+  total_students: number;
+  avg_danger_level: number;
 }
 
 export interface DashboardResponse {
