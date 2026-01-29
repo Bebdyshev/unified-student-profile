@@ -186,6 +186,57 @@ export interface AnalyticsData {
   students: any[];
 }
 
+// Actionable Insights types
+export interface AtRiskStudent {
+  id: number;
+  name: string;
+  class: string;
+  avg_danger_level: number;
+  avg_delta_percentage: number;
+  subjects_affected: number;
+  priority: 'critical' | 'high';
+}
+
+export interface ProblemClass {
+  id: number;
+  class: string;
+  curator: string;
+  student_count: number;
+  avg_danger_level: number;
+  at_risk_students: number;
+  attention_needed: 'immediate' | 'monitor';
+}
+
+export interface SubjectAnalysis {
+  subject: string;
+  students_count: number;
+  avg_danger_level: number;
+  avg_performance_gap: number;
+  problem_students: number;
+  status: 'critical' | 'warning' | 'ok';
+}
+
+export interface Recommendation {
+  type: 'urgent' | 'warning' | 'info' | 'success';
+  title: string;
+  description: string;
+  action: string | null;
+  link: string | null;
+}
+
+export interface InsightsData {
+  at_risk_students: AtRiskStudent[];
+  problem_classes: ProblemClass[];
+  subject_analysis: SubjectAnalysis[];
+  recommendations: Recommendation[];
+  summary: {
+    total_students: number;
+    at_risk_count: number;
+    critical_count: number;
+    at_risk_percentage: number;
+  };
+}
+
 // Class types
 export interface ClassData {
   class_name: string;
@@ -600,6 +651,15 @@ class ApiService {
       });
 
       return await Promise.all(promises);
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async getInsights(): Promise<InsightsData> {
+    try {
+      const response: AxiosResponse<InsightsData> = await apiClient.get('/dashboard/insights');
+      return response.data;
     } catch (error) {
       throw handleApiError(error);
     }

@@ -1,21 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { 
-  BarChart3, 
-  BookOpen, 
-  GraduationCap, 
-  TrendingUp, 
+  AlertTriangle, 
+  TrendingDown,
+  TrendingUp,
   Users, 
-  AlertTriangle,
-  CheckCircle 
+  BookOpen,
+  Lightbulb,
+  ArrowRight,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  Info,
+  School,
+  Target
 } from 'lucide-react';
-import api from '@/lib/api';
-import { ApiError } from '@/utils/errorHandler';
-import { toast } from 'react-toastify';
+import api, { InsightsData, AtRiskStudent, ProblemClass, SubjectAnalysis, Recommendation } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface Grade {
   id: number;
@@ -31,100 +37,59 @@ interface AnalyticsOverviewProps {
   grades: Grade[];
 }
 
-interface DangerLevelStats {
-  level: number;
-  count: number;
-  students: any[];
-}
-
 export default function AnalyticsOverview({ grades }: AnalyticsOverviewProps) {
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [parallels, setParallels] = useState<string[]>([]);
-  const [dangerStats, setDangerStats] = useState<DangerLevelStats[]>([]);
+  const router = useRouter();
+  const [insights, setInsights] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchAnalyticsData();
+    fetchInsights();
   }, []);
 
-  const fetchAnalyticsData = async () => {
+  const fetchInsights = async () => {
     setLoading(true);
     try {
-      // Fetch subjects and parallels
-      const [subjects, parallels] = await Promise.all([
-        api.getSubjects(),
-        api.getParallels()
-      ]);
-
-      setSubjects(subjects);
-      setParallels(parallels);
-
-      // Fetch danger level statistics using the analytics method
-      const dangerResults = await api.getAnalytics();
-      setDangerStats(dangerResults);
-
-    } catch (err) {
-      const apiError = err as ApiError;
-      toast.error(`Ошибка загрузки аналитики: ${apiError.message}`);
+      const data = await api.getInsights();
+      setInsights(data);
+    } catch (err: any) {
+      toast.error(`Ошибка загрузки аналитики: ${err.message || 'Неизвестная ошибка'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Calculate statistics
-  const totalStudents = grades.reduce((sum, grade) => sum + (grade.actualStudentCount || 0), 0);
-  const totalClasses = grades.length;
-  const averageStudentsPerClass = totalClasses > 0 ? Math.round(totalStudents / totalClasses) : 0;
-  
-  // Danger level statistics
-  const totalDangerStudents = dangerStats.reduce((sum, stat) => sum + stat.count, 0);
-  const dangerPercentage = totalStudents > 0 ? Math.round((totalDangerStudents / totalStudents) * 100) : 0;
-
-  // Extract parallel numbers from grades (e.g., "9А" -> "9", "10Б" -> "10")
-  const extractParallel = (grade: string) => {
-    const match = grade.match(/^\d+/);
-    return match ? match[0] : null;
-  };
-
-  // Get all unique parallels from both API data and local grades data
-  const apiParallels = parallels.map(extractParallel).filter(Boolean);
-  const localParallels = grades.map(grade => extractParallel(grade.grade)).filter(Boolean);
-  const allParallels = new Set([...apiParallels, ...localParallels]);
-  
-  // Group grades by parallel
-  const parallelStats = Array.from(allParallels)
-    .sort((a, b) => parseInt(a!) - parseInt(b!)) // Sort numerically
-    .map(parallel => {
-      // Find all grades that belong to this parallel
-      const parallelGrades = grades.filter(grade => {
-        const gradeParallel = extractParallel(grade.grade);
-        return gradeParallel === parallel;
-      });
-      
-      const students = parallelGrades.reduce((sum, grade) => sum + (grade.actualStudentCount || 0), 0);
-      return {
-        parallel: parallel!,
-        classes: parallelGrades.length,
-        students
-      };
-    })
-    .filter(stat => stat.classes > 0); // Only show parallels that have classes
-
-  const getDangerLevelColor = (level: number) => {
-    switch (level) {
-      case 1: return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 2: return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 3: return 'bg-red-100 text-red-800 border-red-300';
-      default: return 'bg-gray-100 text-gray-800 border-gray-300';
+  const getRecommendationIcon = (type: string) => {
+    switch (type) {
+      case 'urgent': return <XCircle className="h-5 w-5 text-red-500" />;
+      case 'warning': return <AlertCircle className="h-5 w-5 text-orange-500" />;
+      case 'info': return <Info className="h-5 w-5 text-blue-500" />;
+      case 'success': return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+      default: return <Info className="h-5 w-5" />;
     }
   };
 
-  const getDangerLevelText = (level: number) => {
-    switch (level) {
-      case 1: return 'Низкий риск';
-      case 2: return 'Средний риск';
-      case 3: return 'Высокий риск';
-      default: return 'Неизвестно';
+  const getRecommendationStyle = (type: string) => {
+    switch (type) {
+      case 'urgent': return 'border-red-200 bg-red-50';
+      case 'warning': return 'border-orange-200 bg-orange-50';
+      case 'info': return 'border-blue-200 bg-blue-50';
+      case 'success': return 'border-green-200 bg-green-50';
+      default: return 'border-gray-200 bg-gray-50';
+    }
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    return priority === 'critical' 
+      ? <Badge variant="destructive">Критический</Badge>
+      : <Badge variant="secondary" className="bg-orange-100 text-orange-800">Высокий</Badge>;
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'critical': return <Badge variant="destructive">Критический</Badge>;
+      case 'warning': return <Badge className="bg-orange-100 text-orange-800 border-orange-200">Внимание</Badge>;
+      case 'ok': return <Badge className="bg-green-100 text-green-800 border-green-200">Норма</Badge>;
+      default: return null;
     }
   };
 
@@ -133,204 +98,310 @@ export default function AnalyticsOverview({ grades }: AnalyticsOverviewProps) {
       <div className="space-y-6">
         <Card>
           <CardContent className="p-6 text-center">
-            Загрузка аналитики...
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Загрузка аналитики...</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
+  if (!insights) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6 text-center text-muted-foreground">
+            Нет данных для отображения
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const totalStudents = grades.reduce((sum, grade) => sum + (grade.actualStudentCount || 0), 0);
+
   return (
     <div className="space-y-6">
-      {/* Main Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Всего студентов</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalStudents}</div>
+            <div className="text-2xl font-bold">{insights.summary.total_students || totalStudents}</div>
             <p className="text-xs text-muted-foreground">
-              в {totalClasses} классах
+              в {grades.length} классах
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={insights.summary.at_risk_count > 0 ? 'border-orange-200' : ''}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">В зоне риска</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{insights.summary.at_risk_count}</div>
+            <p className="text-xs text-muted-foreground">
+              {insights.summary.at_risk_percentage}% от общего числа
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className={insights.summary.critical_count > 0 ? 'border-red-200' : ''}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Критические случаи</CardTitle>
+            <XCircle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{insights.summary.critical_count}</div>
+            <p className="text-xs text-muted-foreground">
+              требуют немедленного внимания
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Средний размер класса</CardTitle>
-            <GraduationCap className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Проблемных классов</CardTitle>
+            <School className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{averageStudentsPerClass}</div>
+            <div className="text-2xl font-bold">{insights.problem_classes.length}</div>
             <p className="text-xs text-muted-foreground">
-              студентов на класс
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Студенты в зоне риска</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalDangerStudents}</div>
-            <p className="text-xs text-muted-foreground">
-              {dangerPercentage}% от общего числа
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Активных предметов</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{subjects.length}</div>
-            <p className="text-xs text-muted-foreground">
-              предметов ведется
+              требуют мониторинга
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Danger Level Analysis */}
+      {/* Recommendations */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp size={20} />
-            Анализ уровней риска
+            Рекомендации
           </CardTitle>
           <CardDescription>
-            Распределение студентов по уровням академического риска
+            На что обратить внимание в первую очередь
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {dangerStats.map((stat) => (
-              <div key={stat.level} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <Badge variant="outline" className={getDangerLevelColor(stat.level)}>
-                    Уровень {stat.level}
-                  </Badge>
-                  <div>
-                    <p className="font-medium">{getDangerLevelText(stat.level)}</p>
-                    <p className="text-sm text-gray-600">
-                      {stat.count} студентов
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold">{stat.count}</div>
-                  <div className="text-sm text-gray-500">
-                    {totalStudents > 0 ? Math.round((stat.count / totalStudents) * 100) : 0}%
+          <div className="space-y-3">
+            {insights.recommendations.map((rec, index) => (
+              <div 
+                key={index} 
+                className={`p-4 rounded-lg border ${getRecommendationStyle(rec.type)}`}
+              >
+                <div className="flex items-start gap-3">
+                  {getRecommendationIcon(rec.type)}
+                  <div className="flex-1">
+                    <h4 className="font-semibold">{rec.title}</h4>
+                    <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+                    {rec.action && rec.link && (
+                      <Button 
+                        variant="link" 
+                        className="p-0 h-auto mt-2"
+                        onClick={() => router.push(rec.link!)}
+                      >
+                        {rec.action} <ArrowRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
             ))}
-            
-            {totalDangerStudents === 0 && (
-              <div className="flex items-center justify-center p-8 text-green-600">
-                <CheckCircle className="h-6 w-6 mr-2" />
-                <span className="font-medium">Все студенты показывают хорошие результаты!</span>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Parallels Statistics */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 size={20} />
-            Статистика по параллелям
-          </CardTitle>
-          <CardDescription>
-            Распределение классов и студентов по параллелям
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {parallelStats.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              Нет данных о параллелях
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {parallelStats.map((stat) => {
-                const averagePerClass = stat.classes > 0 ? Math.round(stat.students / stat.classes) : 0;
-                const percentage = totalStudents > 0 ? Math.round((stat.students / totalStudents) * 100) : 0;
-                
-                return (
-                  <div key={stat.parallel} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <p className="font-medium text-lg">{stat.parallel} класс</p>
-                        <Badge variant="outline">{percentage}% от общего числа</Badge>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {stat.classes} {stat.classes === 1 ? 'класс' : stat.classes < 5 ? 'класса' : 'классов'} • 
-                        Среднее: {averagePerClass} студентов в классе
+      {/* At-Risk Students */}
+      {insights.at_risk_students.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              Студенты, требующие внимания
+            </CardTitle>
+            <CardDescription>
+              Топ-10 студентов с наибольшим уровнем риска
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {insights.at_risk_students.map((student) => (
+                <div 
+                  key={student.id}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => router.push(`/dashboard/students/${student.id}`)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      student.priority === 'critical' ? 'bg-red-100' : 'bg-orange-100'
+                    }`}>
+                      <TrendingDown className={`h-5 w-5 ${
+                        student.priority === 'critical' ? 'text-red-600' : 'text-orange-600'
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="font-medium">{student.name}</p>
+                      <p className="text-sm text-muted-foreground">{student.class}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Уровень риска:</span>{' '}
+                        <span className="font-medium">{student.avg_danger_level}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {student.subjects_affected} предметов
                       </p>
                     </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-blue-600">{stat.students}</div>
-                      <div className="text-sm text-gray-500">студентов</div>
-                    </div>
-                  </div>
-                );
-              })}
-              
-              {/* Summary */}
-              <div className="mt-6 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold">Итого</p>
-                    <p className="text-sm text-gray-600">
-                      {parallelStats.length} {parallelStats.length === 1 ? 'параллель' : parallelStats.length < 5 ? 'параллели' : 'параллелей'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xl font-bold">{totalClasses}</div>
-                    <div className="text-sm text-gray-500">классов всего</div>
+                    {getPriorityBadge(student.priority)}
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Subjects List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen size={20} />
-            Активные предметы
-          </CardTitle>
-          <CardDescription>
-            Список предметов, по которым ведется учет оценок
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {subjects.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              Пока нет данных о предметах
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {subjects.map((subject, index) => (
-                <Badge key={index} variant="secondary" className="text-sm">
-                  {subject}
-                </Badge>
               ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <Button 
+              variant="outline" 
+              className="w-full mt-4"
+              onClick={() => router.push('/dashboard/students?danger=2')}
+            >
+              Показать всех студентов в зоне риска
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Problem Classes */}
+      {insights.problem_classes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Классы, требующие мониторинга
+            </CardTitle>
+            <CardDescription>
+              Классы с повышенным средним уровнем риска
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {insights.problem_classes.map((cls) => (
+                <div 
+                  key={cls.id}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      cls.attention_needed === 'immediate' ? 'bg-red-100' : 'bg-yellow-100'
+                    }`}>
+                      <Target className={`h-5 w-5 ${
+                        cls.attention_needed === 'immediate' ? 'text-red-600' : 'text-yellow-600'
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="font-medium">{cls.class}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Куратор: {cls.curator}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-sm">
+                        <span className="font-medium">{cls.at_risk_students}</span>
+                        <span className="text-muted-foreground"> / {cls.student_count}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">в зоне риска</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">
+                        {cls.avg_danger_level.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">средний риск</p>
+                    </div>
+                    <Badge variant={cls.attention_needed === 'immediate' ? 'destructive' : 'outline'}>
+                      {cls.attention_needed === 'immediate' ? 'Срочно' : 'Наблюдение'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Subject Analysis */}
+      {insights.subject_analysis.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Анализ по предметам
+            </CardTitle>
+            <CardDescription>
+              Успеваемость студентов по различным предметам
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {insights.subject_analysis.map((subject, index) => (
+                <div 
+                  key={index}
+                  className="flex items-center justify-between p-3 border rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      subject.status === 'critical' ? 'bg-red-100' : 
+                      subject.status === 'warning' ? 'bg-orange-100' : 'bg-green-100'
+                    }`}>
+                      <BookOpen className={`h-5 w-5 ${
+                        subject.status === 'critical' ? 'text-red-600' : 
+                        subject.status === 'warning' ? 'text-orange-600' : 'text-green-600'
+                      }`} />
+                    </div>
+                    <div>
+                      <p className="font-medium">{subject.subject}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {subject.students_count} студентов
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Проблемных:</span>{' '}
+                        <span className="font-medium">{subject.problem_students}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Δ {subject.avg_performance_gap}%
+                      </p>
+                    </div>
+                    {getStatusBadge(subject.status)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty State */}
+      {insights.at_risk_students.length === 0 && 
+       insights.problem_classes.length === 0 && 
+       insights.subject_analysis.length === 0 && (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Отличные результаты!</h3>
+            <p className="text-muted-foreground">
+              На данный момент все студенты показывают хорошую успеваемость.
+              Продолжайте мониторинг для раннего выявления проблем.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
-} 
+}
