@@ -35,9 +35,10 @@ interface Grade {
 
 interface AnalyticsOverviewProps {
   grades: Grade[];
+  onTabChange?: (tab: string) => void;
 }
 
-export default function AnalyticsOverview({ grades }: AnalyticsOverviewProps) {
+export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOverviewProps) {
   const router = useRouter();
   const [insights, setInsights] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +47,19 @@ export default function AnalyticsOverview({ grades }: AnalyticsOverviewProps) {
     fetchInsights();
   }, []);
 
+  const handleActionClick = (link: string | null) => {
+    if (!link) return;
+    
+    // Check if it's an internal tab switch for /dashboard/classes
+    if (link === '/dashboard/classes' && onTabChange) {
+      onTabChange('classes');
+    } else {
+      router.push(link);
+    }
+  };
+
   const fetchInsights = async () => {
+
     setLoading(true);
     try {
       const data = await api.getInsights();
@@ -203,7 +216,7 @@ export default function AnalyticsOverview({ grades }: AnalyticsOverviewProps) {
                       <Button 
                         variant="link" 
                         className="p-0 h-auto mt-2"
-                        onClick={() => router.push(rec.link!)}
+                        onClick={() => handleActionClick(rec.link)}
                       >
                         {rec.action} <ArrowRight className="h-4 w-4 ml-1" />
                       </Button>

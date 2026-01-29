@@ -212,6 +212,25 @@ export default function ClassManagementPage() {
     setIsCreateDialogOpen(true);
   };
 
+  const [currentTab, setCurrentTab] = useState("classes");
+
+  // Handle URL query param for initial tab
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['classes', 'students', 'analytics'].includes(tab)) {
+      setCurrentTab(tab);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (value: string) => {
+    setCurrentTab(value);
+    // Optional: update URL query param
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', value);
+    window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
   return (
     <PageContainer scrollable>
       <div className="py-4">
@@ -231,7 +250,7 @@ export default function ClassManagementPage() {
           </div>
         </div>
 
-        <Tabs defaultValue="classes" className="space-y-6">
+        <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="classes" className="flex items-center gap-2">
               <GraduationCap size={16} />
@@ -394,10 +413,9 @@ export default function ClassManagementPage() {
                 studentCount: g.student_count,
                 actualStudentCount: g.actual_student_count
               }))}
+              onTabChange={handleTabChange}
             />
           </TabsContent>
-
-
         </Tabs>
 
         {/* Create Dialog */}

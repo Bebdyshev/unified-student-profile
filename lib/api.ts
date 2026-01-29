@@ -580,10 +580,21 @@ class ApiService {
       throw handleApiError(error);
     }
   }
-
-  async getStudentsByGrade(gradeId: number): Promise<any[]> {
+  async getGradeSubjects(gradeId: number): Promise<string[]> {
     try {
-      const response: AxiosResponse<any[]> = await apiClient.get(`/grades/students/${gradeId}`);
+      const response: AxiosResponse<string[]> = await apiClient.get(`/grades/${gradeId}/subjects`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+
+  async getStudentsByGrade(gradeId: number, subject?: string): Promise<any[]> {
+    try {
+      const response: AxiosResponse<any[]> = await apiClient.get(`/grades/students/${gradeId}`, {
+         params: { subject: subject === 'all' ? undefined : subject }
+      });
       return response.data;
     } catch (error) {
       throw handleApiError(error);

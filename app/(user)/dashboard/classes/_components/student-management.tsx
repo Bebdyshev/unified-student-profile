@@ -57,6 +57,8 @@ interface StudentManagementProps {
 export default function StudentManagement({ grades, onRefreshGrades }: StudentManagementProps) {
   const [selectedGradeId, setSelectedGradeId] = useState<number | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -70,16 +72,33 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
 
   useEffect(() => {
     if (selectedGradeId) {
-      fetchStudents(selectedGradeId);
+      fetchSubjects(selectedGradeId);
+      // Reset subject selection when grade changes
+      setSelectedSubject('all');
+    } else {
+      setSubjects([]);
     }
   }, [selectedGradeId]);
 
-  // No subjects on create student; subjects/оценки добавляются через Excel
+  useEffect(() => {
+    if (selectedGradeId) {
+      fetchStudents(selectedGradeId);
+    }
+  }, [selectedGradeId, selectedSubject]);
+
+  const fetchSubjects = async (gradeId: number) => {
+    try {
+      const data = await api.getGradeSubjects(gradeId);
+      setSubjects(data);
+    } catch (err) {
+      console.error('Failed to fetch subjects', err);
+    }
+  };
 
   const fetchStudents = async (gradeId: number) => {
     setLoading(true);
     try {
-      const students = await api.getStudentsByGrade(gradeId);
+      const students = await api.getStudentsByGrade(gradeId, selectedSubject);
       setStudents(students);
     } catch (err) {
       const apiError = handleApiError(err);
@@ -163,12 +182,12 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
   };
 
   const openCreateDialog = () => {
-    if (!selectedGradeId) {
-      toast.error('Сначала выберите класс');
-      return;
-    }
-    resetForm();
-    setIsCreateDialogOpen(true);
+     if (!selectedGradeId) {
+       toast.error('Сначала выберите класс');
+       return;
+     }
+     resetForm();
+     setIsCreateDialogOpen(true);
   };
 
   return (
@@ -181,12 +200,12 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
             Управление студентами
           </CardTitle>
           <CardDescription>
-            Выберите класс для управления студентами
+            Выберите класс и предмет для просмотра успеваемости
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 space-y-2">
               <Label htmlFor="grade-select">Выберите класс</Label>
               <Select value={selectedGradeId?.toString() || 'none'} onValueChange={(value) => setSelectedGradeId(value === 'none' ? null : parseInt(value))}>
                 <SelectTrigger>
@@ -196,12 +215,34 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
                   <SelectItem value="none">Не выбран</SelectItem>
                   {grades.map((grade) => (
                     <SelectItem key={grade.id} value={grade.id.toString()}>
-                      {grade.grade} - {grade.curatorName} ({grade.actualStudentCount || 0} студентов)
+                      {grade.grade} - {grade.curatorName} ({grade.actualStudentCount || 0} студ.)
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="subject-select">Выберите предмет</Label>
+              <Select 
+                value={selectedSubject} 
+                onValueChange={setSelectedSubject}
+                disabled={!selectedGradeId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Все предметы" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все предметы</SelectItem>
+                  {subjects.map((subj) => (
+                    <SelectItem key={subj} value={subj}>
+                      {subj}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button 
               onClick={openCreateDialog} 
               disabled={!selectedGradeId}
