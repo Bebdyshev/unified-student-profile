@@ -262,7 +262,9 @@ export default function StudentsPage() {
                     <SelectItem value="all">Все классы</SelectItem>
                     {grades.map((grade) => (
                       <SelectItem key={grade.id} value={`${grade.grade}_${grade.parallel}`}>
-                        {grade.grade} {grade.parallel}
+                        {grade.grade && grade.parallel && grade.grade.includes(grade.parallel) 
+                          ? grade.grade 
+                          : `${grade.grade} ${grade.parallel}`}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -328,7 +330,10 @@ export default function StudentsPage() {
                           {student.grade_info && (
                             <span className="flex items-center gap-1">
                               <GraduationCap className="h-3 w-3" />
-                              {student.grade_info.grade} {student.grade_info.parallel}
+                              {student.grade_info.grade && student.grade_info.parallel && student.grade_info.grade.includes(student.grade_info.parallel)
+                                ? student.grade_info.grade
+                                : `${student.grade_info.grade} ${student.grade_info.parallel}`
+                              }
                             </span>
                           )}
                           {student.email && <span>• {student.email}</span>}
