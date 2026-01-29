@@ -18,10 +18,19 @@ import {
   XCircle,
   Info,
   School,
-  Target
+  Target,
+  Filter
 } from 'lucide-react';
 import api, { InsightsData, AtRiskStudent, ProblemClass, SubjectAnalysis, Recommendation } from '@/lib/api';
 import { toast } from 'sonner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface Grade {
   id: number;
@@ -43,14 +52,28 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
   const [insights, setInsights] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Filtering State
+  const [selectedParallel, setSelectedParallel] = useState<string>('all');
+  const [selectedClassId, setSelectedClassId] = useState<string>('all');
+
+  // Compute available parallels (e.g. "7", "8", "9") form grades
+  const parallels = Array.from(new Set(grades.map(g => {
+    const match = g.grade.match(/^(\d+)/);
+    return match ? match[1] : null;
+  }))).filter(Boolean).sort((a, b) => parseInt(a!) - parseInt(b!));
+
   useEffect(() => {
     fetchInsights();
-  }, []);
+  }, [selectedParallel, selectedClassId]);
+
+  // Filter classes options based on selected parallel
+  const filteredClasses = grades.filter(g => {
+      if (selectedParallel === 'all') return true;
+      return g.grade.startsWith(selectedParallel);
+  });
 
   const handleActionClick = (link: string | null) => {
     if (!link) return;
-    
-    // Check if it's an internal tab switch for /dashboard/classes
     if (link === '/dashboard/classes' && onTabChange) {
       onTabChange('classes');
     } else {
@@ -59,10 +82,11 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
   };
 
   const fetchInsights = async () => {
-
     setLoading(true);
     try {
-      const data = await api.getInsights();
+      const classLevel = selectedParallel === 'all' ? undefined : selectedParallel;
+      const gradeId = selectedClassId === 'all' ? undefined : parseInt(selectedClassId);
+      const data = await api.getInsights(classLevel, gradeId);
       setInsights(data);
     } catch (err: any) {
       toast.error(`Ошибка загрузки аналитики: ${err.message || 'Неизвестная ошибка'}`);
@@ -135,6 +159,48 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
 
   return (
     <div className="space-y-6">
+       {/* Filters Section */}
+       <Card>
+        <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+                <Filter size={16} /> Фильтры аналитики
+            </CardTitle>
+        </CardHeader>
+        <CardContent>
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 space-y-2">
+                    <Label>Параллель</Label>
+                    <Select value={selectedParallel} onValueChange={(val) => {setSelectedParallel(val); setSelectedClassId('all');}}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Все параллели" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Все параллели</SelectItem>
+                            {parallels.map(p => (
+                                <SelectItem key={p!} value={p!}>{p} классы</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                
+                <div className="flex-1 space-y-2">
+                    <Label>Класс</Label>
+                    <Select value={selectedClassId} onValueChange={setSelectedClassId} disabled={false}> 
+                        <SelectTrigger>
+                            <SelectValue placeholder="Все классы" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Все классы</SelectItem>
+                            {filteredClasses.map(g => (
+                                <SelectItem key={g.id} value={g.id.toString()}>{g.grade}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+        </CardContent>
+      </Card>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>

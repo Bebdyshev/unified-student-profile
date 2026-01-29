@@ -56,6 +56,7 @@ interface StudentManagementProps {
 
 export default function StudentManagement({ grades, onRefreshGrades }: StudentManagementProps) {
   const [selectedGradeId, setSelectedGradeId] = useState<number | null>(null);
+  const [selectedParallel, setSelectedParallel] = useState<string>('all');
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
@@ -71,20 +72,29 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
   const selectedGrade = grades.find(g => g.id === selectedGradeId);
 
   useEffect(() => {
-    if (selectedGradeId) {
-      fetchSubjects(selectedGradeId);
-      // Reset subject selection when grade changes
-      setSelectedSubject('all');
-    } else {
-      setSubjects([]);
+    // Fetch subjects whenever the list of available grades might change or a grade is selected
+    // For now, if we have any grades, we can fetch subjects for the first one to get the list
+    if (grades.length > 0) {
+      const gId = selectedGradeId || grades[0].id;
+      fetchSubjects(gId);
     }
-  }, [selectedGradeId]);
+  }, [selectedGradeId, grades]);
 
   useEffect(() => {
-    if (selectedGradeId) {
-      fetchStudents(selectedGradeId);
-    }
-  }, [selectedGradeId, selectedSubject]);
+    fetchStudents();
+  }, [selectedParallel, selectedGradeId, selectedSubject]);
+
+  // Compute available parallels from grades (e.g. "7", "8")
+  const parallels = Array.from(new Set(grades.map(g => {
+    const match = g.grade.match(/^(\d+)/);
+    return match ? match[1] : null;
+  }))).filter(Boolean).sort((a, b) => parseInt(a!) - parseInt(b!));
+
+  // Filter grades based on selected parallel
+  const filteredGrades = grades.filter(g => {
+    if (selectedParallel === 'all') return true;
+    return g.grade.startsWith(selectedParallel);
+  });
 
   const fetchSubjects = async (gradeId: number) => {
     try {
@@ -95,11 +105,18 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
     }
   };
 
-  const fetchStudents = async (gradeId: number) => {
+  const fetchStudents = async () => {
     setLoading(true);
     try {
-      const students = await api.getStudentsByGrade(gradeId, selectedSubject);
-      setStudents(students);
+      const params: any = { subject: selectedSubject };
+      if (selectedGradeId) {
+        params.grade_id = selectedGradeId;
+      } else if (selectedParallel !== 'all') {
+        params.parallel = selectedParallel;
+      }
+      
+      const studentsData = await api.getStudentsUnified(params);
+      setStudents(studentsData);
     } catch (err) {
       const apiError = handleApiError(err);
       toast.error(`Ошибка загрузки студентов: ${apiError.message}`);
@@ -136,7 +153,7 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
       toast.success('Студент успешно добавлен');
       setIsCreateDialogOpen(false);
       resetForm();
-      fetchStudents(selectedGradeId);
+      fetchStudents();
       onRefreshGrades(); // Refresh grades to update student count
     } catch (err) {
       const apiError = handleApiError(err);
@@ -157,7 +174,7 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
       toast.success('Студент успешно удален');
       setIsDeleteDialogOpen(false);
       resetForm();
-      fetchStudents(selectedGradeId!);
+      fetchStudents();
       onRefreshGrades(); // Refresh grades to update student count
     } catch (err) {
       const apiError = handleApiError(err);
@@ -206,16 +223,31 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4 items-end">
             <div className="flex-1 space-y-2">
-              <Label htmlFor="grade-select">Выберите класс</Label>
+              <Label htmlFor="parallel-select">Параллель</Label>
+              <Select value={selectedParallel} onValueChange={(val) => {setSelectedParallel(val); setSelectedGradeId(null);}}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Все параллели" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все параллели</SelectItem>
+                  {parallels.map(p => (
+                    <SelectItem key={p!} value={p!}>{p} классы</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="grade-select">Класс</Label>
               <Select value={selectedGradeId?.toString() || 'none'} onValueChange={(value) => setSelectedGradeId(value === 'none' ? null : parseInt(value))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Выберите класс..." />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Не выбран</SelectItem>
-                  {grades.map((grade) => (
+                  {filteredGrades.map((grade) => (
                     <SelectItem key={grade.id} value={grade.id.toString()}>
-                      {grade.grade} - {grade.curatorName} ({grade.actualStudentCount || 0} студ.)
+                      {grade.grade} - {grade.curatorName}
                     </SelectItem>
                   ))}
                 </SelectContent>

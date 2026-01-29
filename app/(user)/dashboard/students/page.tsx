@@ -56,6 +56,7 @@ export default function StudentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedDangerLevel, setSelectedDangerLevel] = useState<string>('all');
+  const [selectedParallel, setSelectedParallel] = useState<string>('all');
 
   // Read danger level from URL parameters
   useEffect(() => {
@@ -77,7 +78,18 @@ export default function StudentsPage() {
 
   useEffect(() => {
     filterStudents();
-  }, [students, searchQuery, selectedGrade, selectedDangerLevel]);
+  }, [students, searchQuery, selectedGrade, selectedDangerLevel, selectedParallel]);
+
+  // Compute parallels from grades
+  const parallels = Array.from(new Set(grades.map(g => {
+    const match = g.grade.match(/^(\d+)/);
+    return match ? match[1] : null;
+  }))).filter(Boolean).sort((a, b) => parseInt(a!) - parseInt(b!));
+  
+  const filteredGrades = grades.filter(g => {
+      if (selectedParallel === 'all') return true;
+      return g.grade.startsWith(selectedParallel);
+  });
 
   const fetchData = async () => {
     try {
@@ -160,6 +172,11 @@ export default function StudentsPage() {
       filtered = filtered.filter(student =>
         student.grade_info && `${student.grade_info.grade}_${student.grade_info.parallel}` === selectedGrade
       );
+    } else if (selectedParallel !== 'all') {
+      // If "All Grades" is selected but a Parallel is chosen, filter by Parallel
+      filtered = filtered.filter(student => 
+        student.grade_info && student.grade_info.grade.startsWith(selectedParallel)
+      );
     }
 
     // Filter by danger level
@@ -236,7 +253,7 @@ export default function StudentsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Search */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Поиск</label>
@@ -251,6 +268,21 @@ export default function StudentsPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Параллель</label>
+                <Select value={selectedParallel} onValueChange={(v) => {setSelectedParallel(v); setSelectedGrade('all');}}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Все параллели" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Все параллели</SelectItem>
+                    {parallels.map(p => (
+                        <SelectItem key={p!} value={p!}>{p} классы</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Grade Filter */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Класс</label>
@@ -260,7 +292,7 @@ export default function StudentsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Все классы</SelectItem>
-                    {grades.map((grade) => (
+                    {filteredGrades.map((grade) => (
                       <SelectItem key={grade.id} value={`${grade.grade}_${grade.parallel}`}>
                         {grade.grade && grade.parallel && grade.grade.includes(grade.parallel) 
                           ? grade.grade 

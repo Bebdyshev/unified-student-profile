@@ -601,6 +601,19 @@ class ApiService {
     }
   }
 
+  async getStudentsUnified(params: { grade_id?: number; parallel?: string; subject?: string }): Promise<any[]> {
+    try {
+      const filteredParams = {
+        ...params,
+        subject: params.subject === 'all' ? undefined : params.subject
+      };
+      const response: AxiosResponse<any[]> = await apiClient.get('/grades/students-list', { params: filteredParams });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
   // ==================== FILE UPLOAD ====================
 
   async uploadFile(file: File, endpoint: string): Promise<any> {
@@ -667,12 +680,20 @@ class ApiService {
     }
   }
 
-  async getInsights(): Promise<InsightsData> {
+  async getInsights(classLevel?: string, gradeId?: number): Promise<InsightsData | null> {
     try {
-      const response: AxiosResponse<InsightsData> = await apiClient.get('/dashboard/insights');
+      const response: AxiosResponse<InsightsData> = await apiClient.get('/dashboard/insights', {
+        params: { 
+            class_level: classLevel === 'all' ? undefined : classLevel,
+            grade_id: gradeId 
+        }
+      });
       return response.data;
     } catch (error) {
-      throw handleApiError(error);
+       // Using console error to avoid changing the return type signature too much if it was strict, 
+       // but here we return Promise<InsightsData | null>
+      console.error('Failed to fetch insights:', error);
+      return null;
     }
   }
 
