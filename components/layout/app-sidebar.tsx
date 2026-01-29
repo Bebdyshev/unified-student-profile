@@ -39,7 +39,7 @@ import {
   LogOut
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Breadcrumbs } from '../breadcrumbs';
@@ -58,7 +58,13 @@ export default function AppSidebar({
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const [userInfo, setUserInfo] = useState<{ company_name?: string; name: string }>({"company_name": "Freedom", "name": "Berdyshev Kerey"});
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    router.push('/signin');
+  };
 
   useEffect(() => {
     async function fetchUserInfo() {
@@ -196,7 +202,7 @@ export default function AppSidebar({
                   align="end"
                   sideOffset={4}
                 >
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 size-4" />
                     Выйти
                   </DropdownMenuItem>

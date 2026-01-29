@@ -51,11 +51,6 @@ export const navItems: NavItem[] = [
     icon: 'forms'
   },
   {
-    title: 'Профиль',
-    url: '/dashboard/profile',
-    icon: 'user'
-  },
-  {
     title: 'Настройки',
     url: '/admin/settings',
     icon: 'settings'

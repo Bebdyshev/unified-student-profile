@@ -11,8 +11,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export function UserNav() {
+  const router = useRouter();
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    router.push('/signin');
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -37,7 +44,7 @@ export function UserNav() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
+        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>
