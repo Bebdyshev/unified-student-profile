@@ -793,9 +793,16 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Clickable */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
+          <Card 
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => {
+              setModalTitle('Все студенты');
+              setModalStudents(filteredStudents);
+              setModalOpen(true);
+            }}
+          >
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -806,6 +813,7 @@ export default function AnalyticsPage() {
                   <Users className="h-6 w-6 text-blue-600" />
                 </div>
               </div>
+              <p className="text-xs text-blue-600 mt-2">Нажмите чтобы посмотреть →</p>
             </CardContent>
           </Card>
 
@@ -823,7 +831,10 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card 
+            className="cursor-pointer hover:shadow-md transition-shadow border-red-200"
+            onClick={showAtRiskStudents}
+          >
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -834,6 +845,7 @@ export default function AnalyticsPage() {
                   <AlertTriangle className="h-6 w-6 text-red-600" />
                 </div>
               </div>
+              <p className="text-xs text-red-600 mt-2">Нажмите чтобы посмотреть →</p>
             </CardContent>
           </Card>
 
@@ -860,13 +872,232 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Charts */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs defaultValue="parallels" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="parallels">По параллелям</TabsTrigger>
             <TabsTrigger value="overview">Обзор</TabsTrigger>
             <TabsTrigger value="grades">По классам</TabsTrigger>
             <TabsTrigger value="quarters">По четвертям</TabsTrigger>
             <TabsTrigger value="students">Список студентов</TabsTrigger>
           </TabsList>
+
+          {/* New Parallels Tab */}
+          <TabsContent value="parallels" className="space-y-4">
+            {/* Parallel Risk Ranking */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Рейтинг параллелей по уровню риска</CardTitle>
+                <CardDescription>
+                  Параллели отсортированы по проценту студентов в зоне риска. Нажмите на числа чтобы посмотреть студентов.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {sortedParallelsByRisk.map((item, index) => (
+                    <div 
+                      key={item.parallel}
+                      className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${
+                        index === 0 && item.riskPercent > 20 ? 'bg-red-500' :
+                        index === 1 && item.riskPercent > 15 ? 'bg-orange-500' :
+                        index === 2 && item.riskPercent > 10 ? 'bg-yellow-500' :
+                        'bg-green-500'
+                      }`}>
+                        {index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-lg">{item.parallel} класс</span>
+                          <div className="flex items-center gap-4">
+                            <span 
+                              className="text-sm text-gray-600 cursor-pointer hover:underline"
+                              onClick={() => showParallelStudents(item.parallel)}
+                            >
+                              {item.total} студентов
+                            </span>
+                            <span 
+                              className={`font-bold cursor-pointer hover:underline ${
+                                item.riskPercent > 30 ? 'text-red-600' :
+                                item.riskPercent > 20 ? 'text-orange-600' :
+                                item.riskPercent > 10 ? 'text-yellow-600' :
+                                'text-green-600'
+                              }`}
+                              onClick={() => showParallelAtRisk(item.parallel)}
+                            >
+                              {item.riskPercent.toFixed(1)}% в риске
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <Badge 
+                            className="bg-green-100 text-green-800 cursor-pointer hover:bg-green-200"
+                            onClick={() => showParallelStudents(item.parallel, 0)}
+                          >
+                            {item.danger0} низкий
+                          </Badge>
+                          <Badge 
+                            className="bg-yellow-100 text-yellow-800 cursor-pointer hover:bg-yellow-200"
+                            onClick={() => showParallelStudents(item.parallel, 1)}
+                          >
+                            {item.danger1} умеренный
+                          </Badge>
+                          <Badge 
+                            className="bg-orange-100 text-orange-800 cursor-pointer hover:bg-orange-200"
+                            onClick={() => showParallelStudents(item.parallel, 2)}
+                          >
+                            {item.danger2} высокий
+                          </Badge>
+                          <Badge 
+                            className="bg-red-100 text-red-800 cursor-pointer hover:bg-red-200"
+                            onClick={() => showParallelStudents(item.parallel, 3)}
+                          >
+                            {item.danger3} критический
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Распределение рисков по параллелям</CardTitle>
+                  <CardDescription>
+                    Количество студентов по уровням риска в каждой параллели
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[350px]">
+                    <Bar 
+                      data={parallelComparisonData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'bottom' }
+                        },
+                        scales: {
+                          x: { stacked: true },
+                          y: { stacked: true, beginAtZero: true }
+                        }
+                      }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Процент студентов в зоне риска</CardTitle>
+                  <CardDescription>
+                    Сравнение параллелей по проценту проблемных студентов
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[350px]">
+                    <Bar 
+                      data={riskPercentageData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false }
+                        },
+                        scales: {
+                          y: { 
+                            beginAtZero: true,
+                            max: 100,
+                            title: { display: true, text: '%' }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Detailed Parallel Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Детализация по параллелям</CardTitle>
+                <CardDescription>Нажмите на числа чтобы увидеть студентов</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Параллель</TableHead>
+                      <TableHead className="text-center">Всего</TableHead>
+                      <TableHead className="text-center">Средний балл</TableHead>
+                      <TableHead className="text-center">Низкий</TableHead>
+                      <TableHead className="text-center">Умеренный</TableHead>
+                      <TableHead className="text-center">Высокий</TableHead>
+                      <TableHead className="text-center">Критический</TableHead>
+                      <TableHead className="text-center">% в риске</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(parallelStats)
+                      .sort((a, b) => Number(a[0]) - Number(b[0]))
+                      .map(([parallel, pStats]) => (
+                        <TableRow key={parallel}>
+                          <TableCell className="font-medium">{parallel} класс</TableCell>
+                          <TableCell 
+                            className="text-center cursor-pointer hover:underline text-blue-600"
+                            onClick={() => showParallelStudents(parallel)}
+                          >
+                            {pStats.total}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {pStats.avgScore.toFixed(1)}%
+                          </TableCell>
+                          <TableCell 
+                            className="text-center cursor-pointer hover:underline text-green-600"
+                            onClick={() => showParallelStudents(parallel, 0)}
+                          >
+                            {pStats.danger0}
+                          </TableCell>
+                          <TableCell 
+                            className="text-center cursor-pointer hover:underline text-yellow-600"
+                            onClick={() => showParallelStudents(parallel, 1)}
+                          >
+                            {pStats.danger1}
+                          </TableCell>
+                          <TableCell 
+                            className="text-center cursor-pointer hover:underline text-orange-600"
+                            onClick={() => showParallelStudents(parallel, 2)}
+                          >
+                            {pStats.danger2}
+                          </TableCell>
+                          <TableCell 
+                            className="text-center cursor-pointer hover:underline text-red-600"
+                            onClick={() => showParallelStudents(parallel, 3)}
+                          >
+                            {pStats.danger3}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className={`font-bold ${
+                              pStats.riskPercent > 30 ? 'text-red-600' :
+                              pStats.riskPercent > 20 ? 'text-orange-600' :
+                              pStats.riskPercent > 10 ? 'text-yellow-600' :
+                              'text-green-600'
+                            }`}>
+                              {pStats.riskPercent.toFixed(1)}%
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="overview" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -874,7 +1105,7 @@ export default function AnalyticsPage() {
                 <CardHeader>
                   <CardTitle>Распределение по уровням риска</CardTitle>
                   <CardDescription>
-                    Количество студентов по каждому уровню риска
+                    Нажмите на секцию чтобы посмотреть студентов
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -886,6 +1117,12 @@ export default function AnalyticsPage() {
                         maintainAspectRatio: false,
                         plugins: {
                           legend: { position: 'bottom' }
+                        },
+                        onClick: (event, elements) => {
+                          if (elements.length > 0) {
+                            const index = elements[0].index;
+                            showStudentsByDangerLevel(index);
+                          }
                         }
                       }} 
                     />
