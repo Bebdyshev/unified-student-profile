@@ -32,6 +32,7 @@ export function UserManagement() {
   const [loading, setLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAssignClassesDialogOpen, setIsAssignClassesDialogOpen] = useState(false);
   const [selectedUserType, setSelectedUserType] = useState<string>('admin');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [teacherAssignments, setTeacherAssignments] = useState<Record<number, { subjects: string[]; classes: string[] }>>({});
@@ -39,6 +40,9 @@ export function UserManagement() {
   const [editForm, setEditForm] = useState<{ name: string; first_name?: string; last_name?: string; email: string; password?: string; type: string; shanyrak?: string }>({ name: '', email: '', type: 'user' });
   const [allSubjects, setAllSubjects] = useState<Subject[]>([]);
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([]);
+  const [allGrades, setAllGrades] = useState<{ id: number; grade: string }[]>([]);
+  const [teacherCurrentAssignments, setTeacherCurrentAssignments] = useState<any[]>([]);
+  const [selectedAssignments, setSelectedAssignments] = useState<{ subjectId: number; gradeId: number }[]>([]);
   const [formData, setFormData] = useState<CreateUserData>({
     name: '',
     first_name: '',
@@ -147,6 +151,81 @@ export function UserManagement() {
     }
 
     setIsEditDialogOpen(true);
+  };
+
+  const openAssignClassesDialog = async (user: AppUser) => {
+    setCurrentUser(user);
+    try {
+      const [subjects, grades, assignments] = await Promise.all([
+        api.getAllSubjects(),
+        api.getAllGrades(),
+        api.getTeacherAssignments({ teacher_id: user.id })
+      ]);
+      setAllSubjects(subjects as Subject[]);
+      setAllGrades(grades as { id: number; grade: string }[]);
+      setTeacherCurrentAssignments(assignments as any[]);
+      
+      // Build current assignments as array of {subjectId, gradeId}
+      const currentAssigns = (assignments as any[])
+        .filter(a => a.is_active === 1 && a.grade_id)
+        .map(a => ({ subjectId: a.subject_id, gradeId: a.grade_id }));
+      setSelectedAssignments(currentAssigns);
+    } catch (e) {
+      toast.error('Не удалось загрузить данные');
+      return;
+    }
+    setIsAssignClassesDialogOpen(true);
+  };
+
+  const handleSaveAssignments = async () => {
+    if (!currentUser) return;
+    try {
+      // Get current active assignments with grade_id
+      const currentWithGrade = teacherCurrentAssignments
+        .filter(a => a.is_active === 1 && a.grade_id)
+        .map(a => ({ subjectId: a.subject_id, gradeId: a.grade_id, assignmentId: a.id }));
+      
+      // Find assignments to add
+      const toAdd = selectedAssignments.filter(sel => 
+        !currentWithGrade.some(cur => cur.subjectId === sel.subjectId && cur.gradeId === sel.gradeId)
+      );
+      
+      // Find assignments to remove
+      const toRemove = currentWithGrade.filter(cur =>
+        !selectedAssignments.some(sel => sel.subjectId === cur.subjectId && sel.gradeId === cur.gradeId)
+      );
+      
+      // Add new assignments
+      for (const a of toAdd) {
+        await api.createTeacherAssignment({
+          teacher_id: currentUser.id,
+          subject_id: a.subjectId,
+          grade_id: a.gradeId
+        });
+      }
+      
+      // Remove old assignments
+      for (const a of toRemove) {
+        await api.deleteTeacherAssignment(a.assignmentId);
+      }
+      
+      toast.success('Назначения сохранены');
+      setIsAssignClassesDialogOpen(false);
+      await hydrateTeacherAssignments();
+    } catch (e: any) {
+      toast.error(e?.message || 'Ошибка при сохранении');
+    }
+  };
+
+  const toggleAssignment = (subjectId: number, gradeId: number) => {
+    setSelectedAssignments(prev => {
+      const exists = prev.some(a => a.subjectId === subjectId && a.gradeId === gradeId);
+      if (exists) {
+        return prev.filter(a => !(a.subjectId === subjectId && a.gradeId === gradeId));
+      } else {
+        return [...prev, { subjectId, gradeId }];
+      }
+    });
   };
 
   const handleInputChange = (field: keyof CreateUserData, value: string) => {
@@ -398,7 +477,7 @@ export function UserManagement() {
                   <col style={{ width: '24%' }} />
                   {selectedUserType === 'teacher' && <col style={{ width: '18%' }} />}
                   {selectedUserType === 'teacher' && <col style={{ width: '18%' }} />}
-                  <col style={{ width: '120px' }} />
+                  <col style={{ width: selectedUserType === 'teacher' ? '140px' : '120px' }} />
                 </colgroup>
                 <thead>
                   <tr className="bg-gray-100 text-left">
@@ -447,12 +526,26 @@ export function UserManagement() {
                         </>
                       )}
                       <td className="p-3 border-b border-gray-200 text-right">
-                        <Button
-                          variant="outline"
-                          onClick={() => openEditDialog(user)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          {selectedUserType === 'teacher' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openAssignClassesDialog(user)}
+                              title="Назначить классы"
+                            >
+                              <GraduationCap className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditDialog(user)}
+                            title="Редактировать"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -625,6 +718,73 @@ export function UserManagement() {
               >
                 Сохранить
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Classes Dialog */}
+      <Dialog open={isAssignClassesDialogOpen} onOpenChange={setIsAssignClassesDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Назначить классы учителю</DialogTitle>
+            <DialogDescription>
+              {currentUser?.name} - выберите предметы и классы для преподавания
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <ScrollArea className="h-[400px] pr-4">
+              {allSubjects.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">Нет доступных предметов</p>
+              ) : (
+                <div className="space-y-6">
+                  {allSubjects.map(subject => (
+                    <div key={subject.id} className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-primary" />
+                        <h4 className="font-medium">{subject.name}</h4>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 pl-6">
+                        {allGrades.map(grade => {
+                          const isSelected = selectedAssignments.some(
+                            a => a.subjectId === subject.id && a.gradeId === grade.id
+                          );
+                          return (
+                            <label
+                              key={`${subject.id}-${grade.id}`}
+                              className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                                isSelected 
+                                  ? 'bg-primary/10 border-primary' 
+                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                              }`}
+                            >
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleAssignment(subject.id, grade.id)}
+                              />
+                              <span className="text-sm">{grade.grade}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Выбрано: {selectedAssignments.length} назначений
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setIsAssignClassesDialogOpen(false)}>
+                  Отмена
+                </Button>
+                <Button onClick={handleSaveAssignments}>
+                  Сохранить
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
