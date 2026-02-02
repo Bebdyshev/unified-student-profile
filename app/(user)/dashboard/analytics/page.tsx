@@ -23,6 +23,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'react-toastify';
@@ -36,7 +43,8 @@ import {
   CheckCircle,
   Search,
   Download,
-  RefreshCw
+  RefreshCw,
+  ChevronRight
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -93,6 +101,94 @@ interface AnalyticsData {
   parallels: string[];
 }
 
+// Modal Component for Student List
+interface StudentListModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  students: Student[];
+  grades: Grade[];
+  onStudentClick: (studentId: number) => void;
+}
+
+function StudentListModal({ isOpen, onClose, title, students, grades, onStudentClick }: StudentListModalProps) {
+  const getGradeName = (gradeId: number) => {
+    const grade = grades.find(g => g.id === gradeId);
+    return grade?.grade || '-';
+  };
+
+  const getDangerBadgeLocal = (level: number | null | undefined) => {
+    const variants: Record<number, { className: string; label: string }> = {
+      0: { className: 'bg-green-100 text-green-800', label: 'Низкий' },
+      1: { className: 'bg-yellow-100 text-yellow-800', label: 'Умеренный' },
+      2: { className: 'bg-orange-100 text-orange-800', label: 'Высокий' },
+      3: { className: 'bg-red-100 text-red-800', label: 'Критический' }
+    };
+    const variant = variants[level ?? 0] || variants[0];
+    return <Badge className={variant.className}>{variant.label}</Badge>;
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {students.length} студентов
+          </DialogDescription>
+        </DialogHeader>
+        <div className="overflow-auto flex-1">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Имя</TableHead>
+                <TableHead>Класс</TableHead>
+                <TableHead className="text-center">Средний балл</TableHead>
+                <TableHead className="text-center">Δ%</TableHead>
+                <TableHead className="text-center">Риск</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {students.map(student => (
+                <TableRow 
+                  key={student.id}
+                  className="cursor-pointer hover:bg-gray-50"
+                  onClick={() => onStudentClick(student.id)}
+                >
+                  <TableCell>
+                    <div className="font-medium">{student.name}</div>
+                    {student.email && (
+                      <div className="text-xs text-gray-500">{student.email}</div>
+                    )}
+                  </TableCell>
+                  <TableCell>{getGradeName(student.grade_id)}</TableCell>
+                  <TableCell className="text-center">
+                    {student.avg_percentage ? `${student.avg_percentage}%` : '—'}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {student.delta_percentage !== undefined ? (
+                      <span className={student.delta_percentage > 0 ? 'text-green-600' : student.delta_percentage < 0 ? 'text-red-600' : ''}>
+                        {student.delta_percentage > 0 ? '+' : ''}{student.delta_percentage}%
+                      </span>
+                    ) : '—'}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {getDangerBadgeLocal(student.danger_level)}
+                  </TableCell>
+                  <TableCell>
+                    <ChevronRight className="h-4 w-4 text-gray-400" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function AnalyticsPage() {
   const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -112,6 +208,11 @@ export default function AnalyticsPage() {
   const [selectedDangerLevel, setSelectedDangerLevel] = useState<string>('all');
   const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalStudents, setModalStudents] = useState<Student[]>([]);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -270,6 +371,68 @@ export default function AnalyticsPage() {
     };
   }, [filteredStudents]);
 
+  // Stats by parallel - для понимания где больше рисков
+  const parallelStats = useMemo(() => {
+    const stats: { 
+      [key: string]: { 
+        total: number; 
+        atRisk: number; 
+        riskPercent: number;
+        danger0: number;
+        danger1: number;
+        danger2: number;
+        danger3: number;
+        avgScore: number;
+        students: Student[];
+      } 
+    } = {};
+
+    uniqueParallels.forEach(parallel => {
+      const parallelGrades = data.grades.filter(g => 
+        g.parallel === parallel || g.grade.startsWith(parallel)
+      );
+      const gradeIds = parallelGrades.map(g => g.id);
+      const parallelStudents = data.students.filter(s => gradeIds.includes(s.grade_id));
+      
+      let totalAvg = 0;
+      let avgCount = 0;
+      const dangerCounts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+
+      parallelStudents.forEach(s => {
+        if (s.danger_level !== undefined && s.danger_level !== null) {
+          dangerCounts[s.danger_level as keyof typeof dangerCounts]++;
+        }
+        if (s.avg_percentage) {
+          totalAvg += s.avg_percentage;
+          avgCount++;
+        }
+      });
+
+      const atRisk = dangerCounts[2] + dangerCounts[3];
+      
+      stats[parallel] = {
+        total: parallelStudents.length,
+        atRisk,
+        riskPercent: parallelStudents.length > 0 ? (atRisk / parallelStudents.length) * 100 : 0,
+        danger0: dangerCounts[0],
+        danger1: dangerCounts[1],
+        danger2: dangerCounts[2],
+        danger3: dangerCounts[3],
+        avgScore: avgCount > 0 ? totalAvg / avgCount : 0,
+        students: parallelStudents
+      };
+    });
+
+    return stats;
+  }, [uniqueParallels, data.grades, data.students]);
+
+  // Sort parallels by risk percentage
+  const sortedParallelsByRisk = useMemo(() => {
+    return Object.entries(parallelStats)
+      .sort((a, b) => b[1].riskPercent - a[1].riskPercent)
+      .map(([parallel, stats]) => ({ parallel, ...stats }));
+  }, [parallelStats]);
+
   // Chart data for danger level distribution
   const dangerChartData = useMemo(() => ({
     labels: ['Низкий', 'Умеренный', 'Высокий', 'Критический'],
@@ -325,6 +488,71 @@ export default function AnalyticsPage() {
     };
   }, [filteredStudents, data.grades]);
 
+  // Chart data for parallels comparison
+  const parallelComparisonData = useMemo(() => {
+    const sortedParallels = Object.keys(parallelStats).sort((a, b) => Number(a) - Number(b));
+    
+    return {
+      labels: sortedParallels.map(p => `${p} класс`),
+      datasets: [
+        {
+          label: 'Низкий риск',
+          data: sortedParallels.map(p => parallelStats[p].danger0),
+          backgroundColor: 'rgba(34, 197, 94, 0.7)',
+          borderColor: 'rgb(34, 197, 94)',
+          borderWidth: 1
+        },
+        {
+          label: 'Умеренный риск',
+          data: sortedParallels.map(p => parallelStats[p].danger1),
+          backgroundColor: 'rgba(234, 179, 8, 0.7)',
+          borderColor: 'rgb(234, 179, 8)',
+          borderWidth: 1
+        },
+        {
+          label: 'Высокий риск',
+          data: sortedParallels.map(p => parallelStats[p].danger2),
+          backgroundColor: 'rgba(249, 115, 22, 0.7)',
+          borderColor: 'rgb(249, 115, 22)',
+          borderWidth: 1
+        },
+        {
+          label: 'Критический риск',
+          data: sortedParallels.map(p => parallelStats[p].danger3),
+          backgroundColor: 'rgba(239, 68, 68, 0.7)',
+          borderColor: 'rgb(239, 68, 68)',
+          borderWidth: 1
+        }
+      ]
+    };
+  }, [parallelStats]);
+
+  // Risk percentage by parallel
+  const riskPercentageData = useMemo(() => {
+    const sortedParallels = Object.keys(parallelStats).sort((a, b) => Number(a) - Number(b));
+    
+    return {
+      labels: sortedParallels.map(p => `${p} класс`),
+      datasets: [{
+        label: '% студентов в зоне риска',
+        data: sortedParallels.map(p => parallelStats[p].riskPercent.toFixed(1)),
+        backgroundColor: sortedParallels.map(p => 
+          parallelStats[p].riskPercent > 30 ? 'rgba(239, 68, 68, 0.7)' :
+          parallelStats[p].riskPercent > 20 ? 'rgba(249, 115, 22, 0.7)' :
+          parallelStats[p].riskPercent > 10 ? 'rgba(234, 179, 8, 0.7)' :
+          'rgba(34, 197, 94, 0.7)'
+        ),
+        borderColor: sortedParallels.map(p => 
+          parallelStats[p].riskPercent > 30 ? 'rgb(239, 68, 68)' :
+          parallelStats[p].riskPercent > 20 ? 'rgb(249, 115, 22)' :
+          parallelStats[p].riskPercent > 10 ? 'rgb(234, 179, 8)' :
+          'rgb(34, 197, 94)'
+        ),
+        borderWidth: 1
+      }]
+    };
+  }, [parallelStats]);
+
   // Quarter performance data
   const quarterPerformanceData = useMemo(() => {
     const quarterTotals = [0, 0, 0, 0];
@@ -355,6 +583,65 @@ export default function AnalyticsPage() {
       }]
     };
   }, [filteredStudents]);
+
+  // Handler functions for showing students
+  const showStudentsByDangerLevel = (level: number) => {
+    const levelNames: Record<number, string> = {
+      0: 'низким',
+      1: 'умеренным',
+      2: 'высоким',
+      3: 'критическим'
+    };
+    const students = filteredStudents.filter(s => s.danger_level === level);
+    setModalTitle(`Студенты с ${levelNames[level]} риском`);
+    setModalStudents(students);
+    setModalOpen(true);
+  };
+
+  const showAtRiskStudents = () => {
+    const students = filteredStudents.filter(s => s.danger_level && s.danger_level >= 2);
+    setModalTitle('Студенты в зоне риска');
+    setModalStudents(students);
+    setModalOpen(true);
+  };
+
+  const showParallelStudents = (parallel: string, dangerLevel?: number) => {
+    const parallelData = parallelStats[parallel];
+    if (!parallelData) return;
+    
+    let students = parallelData.students;
+    let title = `Студенты ${parallel} класса`;
+    
+    if (dangerLevel !== undefined) {
+      const levelNames: Record<number, string> = {
+        0: 'низким',
+        1: 'умеренным',
+        2: 'высоким',
+        3: 'критическим'
+      };
+      students = students.filter(s => s.danger_level === dangerLevel);
+      title = `Студенты ${parallel} класса с ${levelNames[dangerLevel]} риском`;
+    }
+    
+    setModalTitle(title);
+    setModalStudents(students);
+    setModalOpen(true);
+  };
+
+  const showParallelAtRisk = (parallel: string) => {
+    const parallelData = parallelStats[parallel];
+    if (!parallelData) return;
+    
+    const students = parallelData.students.filter(s => s.danger_level && s.danger_level >= 2);
+    setModalTitle(`Студенты ${parallel} класса в зоне риска`);
+    setModalStudents(students);
+    setModalOpen(true);
+  };
+
+  const handleStudentClick = (studentId: number) => {
+    setModalOpen(false);
+    router.push(`/dashboard/students?id=${studentId}`);
+  };
 
   const getDangerBadge = (level: number | null | undefined) => {
     const variants: Record<number, { className: string; label: string }> = {
