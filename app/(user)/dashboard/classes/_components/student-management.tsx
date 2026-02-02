@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Users, Upload, Download, Filter } from 'lucide-react';
+import { Pencil, Trash2, Plus, Users, Upload, Download, Filter, FileEdit } from 'lucide-react';
 import { handleApiError } from '@/utils/errorHandler';
 import api from '@/lib/api';
 
@@ -37,6 +37,20 @@ interface Student {
   delta_percentage?: number | null;
   last_subject?: string | null;
   last_semester?: number | null;
+  score_id?: number | null;
+  actual_scores?: Record<string, number> | null;
+}
+
+interface Score {
+  id: number;
+  teacher_name: string;
+  subject_name: string;
+  actual_scores: Record<string, number> | null;
+  predicted_scores: Record<string, number> | null;
+  danger_level: number;
+  delta_percentage: number | null;
+  semester: number;
+  student_id: number;
 }
 
 interface Grade {
@@ -76,7 +90,11 @@ export default function StudentManagement({ grades, onRefreshGrades, initialFilt
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
+  const [studentScores, setStudentScores] = useState<Score[]>([]);
+  const [editingScore, setEditingScore] = useState<Score | null>(null);
+  const [scoreFormData, setScoreFormData] = useState<Record<string, number>>({});
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -253,6 +271,55 @@ export default function StudentManagement({ grades, onRefreshGrades, initialFilt
     } catch (err) {
       const apiError = handleApiError(err);
       toast.error(`Ошибка удаления студента: ${apiError.message}`);
+    }
+  };
+
+  // Score editing handlers
+  const handleScoreClick = async (student: Student) => {
+    setCurrentStudent(student);
+    try {
+      const scores = await api.getStudentScores(student.id);
+      setStudentScores(scores);
+      setIsScoreDialogOpen(true);
+    } catch (err) {
+      const apiError = handleApiError(err);
+      toast.error(`Ошибка загрузки оценок: ${apiError.message}`);
+    }
+  };
+
+  const handleEditScoreClick = (score: Score) => {
+    setEditingScore(score);
+    setScoreFormData(score.actual_scores || {});
+  };
+
+  const handleScoreInputChange = (key: string, value: string) => {
+    const numValue = value === '' ? 0 : parseFloat(value);
+    setScoreFormData(prev => ({
+      ...prev,
+      [key]: isNaN(numValue) ? 0 : numValue
+    }));
+  };
+
+  const handleSaveScore = async () => {
+    if (!editingScore) return;
+
+    try {
+      await api.updateScore(editingScore.id, {
+        actual_scores: scoreFormData
+      });
+      toast.success('Оценки успешно обновлены');
+      
+      // Refresh scores
+      if (currentStudent) {
+        const scores = await api.getStudentScores(currentStudent.id);
+        setStudentScores(scores);
+      }
+      setEditingScore(null);
+      setScoreFormData({});
+      fetchStudents(); // Refresh student list to update danger levels
+    } catch (err) {
+      const apiError = handleApiError(err);
+      toast.error(`Ошибка обновления оценок: ${apiError.message}`);
     }
   };
 

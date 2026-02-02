@@ -583,6 +583,56 @@ class ApiService {
       throw handleApiError(error);
     }
   }
+
+  // Score management
+  async updateScore(scoreId: number, scoreData: {
+    actual_scores?: Record<string, number>;
+    predicted_scores?: Record<string, number>;
+    danger_level?: number;
+    delta_percentage?: number;
+  }): Promise<any> {
+    try {
+      const response = await apiClient.put(`/grades/scores/${scoreId}`, scoreData);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async getStudentScores(studentId: number): Promise<any[]> {
+    try {
+      const response = await apiClient.get(`/grades/student/${studentId}/scores`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  // Teacher-specific endpoints
+  async getMyTeacherAssignments(): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/grades/teacher/my-assignments');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async getTeacherStudents(subjectId: number, gradeId?: number, subgroupId?: number): Promise<any[]> {
+    try {
+      const response = await apiClient.get('/grades/teacher/students', {
+        params: {
+          subject_id: subjectId,
+          grade_id: gradeId,
+          subgroup_id: subgroupId
+        }
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
   async getGradeSubjects(gradeId: number): Promise<string[]> {
     try {
       const response: AxiosResponse<string[]> = await apiClient.get(`/grades/${gradeId}/subjects`);
