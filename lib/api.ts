@@ -599,6 +599,19 @@ class ApiService {
     }
   }
 
+  async createScore(studentId: number, subjectId: number, actualScores?: Record<string, number>): Promise<any> {
+    try {
+      const response = await apiClient.post('/grades/scores', {
+        student_id: studentId,
+        subject_id: subjectId,
+        actual_scores: actualScores
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
   async getStudentScores(studentId: number): Promise<any[]> {
     try {
       const response = await apiClient.get(`/grades/student/${studentId}/scores`);

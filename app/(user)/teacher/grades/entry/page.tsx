@@ -160,7 +160,7 @@ function TeacherGradeEntryContent() {
   };
 
   const handleSaveAll = async () => {
-    const dirtyEdits = Object.values(scoreEdits).filter(e => e.isDirty && e.scoreId);
+    const dirtyEdits = Object.values(scoreEdits).filter(e => e.isDirty);
     
     if (dirtyEdits.length === 0) {
       toast.info('Нет изменений для сохранения');
@@ -173,9 +173,30 @@ function TeacherGradeEntryContent() {
 
     for (const edit of dirtyEdits) {
       try {
-        await api.updateScore(edit.scoreId!, {
-          actual_scores: edit.scores
-        });
+        if (edit.scoreId) {
+          // Update existing score
+          await api.updateScore(edit.scoreId, {
+            actual_scores: edit.scores
+          });
+        } else {
+          // Create new score
+          const subject = subjects.find(s => s.id === Number(selectedSubjectId));
+          if (subject) {
+            const result = await api.createScore(
+              edit.studentId,
+              subject.id,
+              edit.scores
+            );
+            // Update scoreId in state
+            setScoreEdits(prev => ({
+              ...prev,
+              [edit.studentId]: {
+                ...prev[edit.studentId],
+                scoreId: result.score.id
+              }
+            }));
+          }
+        }
         savedCount++;
       } catch (err) {
         errorCount++;
@@ -362,8 +383,7 @@ function TeacherGradeEntryContent() {
                                 className="w-20 text-center mx-auto"
                                 value={edit?.scores[quarter] || ''}
                                 onChange={(e) => handleScoreChange(student.id, quarter, e.target.value)}
-                                disabled={!student.score_id}
-                                placeholder={!student.score_id ? '-' : '0'}
+                                placeholder="0"
                               />
                             </td>
                           ))}
