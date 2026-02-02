@@ -59,7 +59,11 @@ export default function AppSidebar({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [userInfo, setUserInfo] = useState<{ company_name?: string; name: string }>({"company_name": "Freedom", "name": "Berdyshev Kerey"});
+  const [userInfo, setUserInfo] = useState<{ company_name?: string; name: string; type?: string }>({
+    company_name: "Freedom", 
+    name: "Berdyshev Kerey",
+    type: "user"
+  });
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -108,7 +112,31 @@ export default function AppSidebar({
           <SidebarGroup>
             <SidebarGroupLabel>Функционал</SidebarGroupLabel>
             <SidebarMenu>
-              {[...navItems, { title: 'Предметы', url: '/dashboard/subjects', icon: 'book' as any }].map((item) => {
+              {[...navItems, { title: 'Предметы', url: '/dashboard/subjects', icon: 'book' as any }]
+                .filter((item) => {
+                  // Filter items based on user type
+                  const navItem = item as any;
+                  const userType = userInfo?.type || 'user';
+                  
+                  // If teacherOnly, show only for teachers and admins
+                  if (navItem.teacherOnly) {
+                    return userType === 'teacher' || userType === 'admin';
+                  }
+                  
+                  // If adminOnly, show only for admins
+                  if (navItem.adminOnly) {
+                    return userType === 'admin';
+                  }
+                  
+                  // Hide admin settings from non-admins
+                  if (item.url === '/admin/settings') {
+                    return userType === 'admin';
+                  }
+                  
+                  // Show all other items to everyone
+                  return true;
+                })
+                .map((item) => {
                 // Safe icon handling with type checking
                 const iconKey = item.icon;
                 const IconComponent = iconKey && typeof iconKey === 'string' && iconKey in Icons 

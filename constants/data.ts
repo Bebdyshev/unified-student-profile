@@ -151,6 +151,14 @@ export const navItems: NavItem[] = [
     items: []
   },
   {
+    title: 'Панель учителя',
+    url: '/teacher/dashboard',
+    icon: 'bookOpen',
+    isActive: false,
+    items: [],
+    teacherOnly: true
+  },
+  {
     title: 'Настройки системы',
     url: '/admin/settings',
     icon: 'settings',

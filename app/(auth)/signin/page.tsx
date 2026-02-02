@@ -55,7 +55,19 @@ export default function SignIn() {
       });
       localStorage.setItem('access_token', response.access_token);
       toast.success("Вход выполнен успешно");
-      router.push("/dashboard/home");
+      
+      // Get user info to determine redirect based on user type
+      try {
+        const userInfo = await api.getCurrentUser();
+        if (userInfo.type === 'teacher') {
+          router.push("/teacher/dashboard");
+        } else {
+          router.push("/dashboard/home");
+        }
+      } catch {
+        // Fallback to default dashboard if can't get user info
+        router.push("/dashboard/home");
+      }
     } catch (err) {
       const apiError = err as ApiError;
       setError(apiError.message);

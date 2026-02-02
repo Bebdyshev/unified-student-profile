@@ -4,6 +4,8 @@ export interface NavItem {
   icon?: string;
   isActive?: boolean;
   items?: NavSubItem[];
+  teacherOnly?: boolean;
+  adminOnly?: boolean;
 }
 
 export interface NavSubItem {
