@@ -48,6 +48,8 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userType, setUserType] = useState<string>('admin');
   
   // Form data
   const [formData, setFormData] = useState<UploadFormData>({
@@ -65,10 +67,40 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   const [subgroups, setSubgroups] = useState<Subgroup[]>([]);
   const [teacherNames, setTeacherNames] = useState<string[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
+  const [teacherAssignments, setTeacherAssignments] = useState<any[]>([]);
   
   // Upload result
   const [uploadResult, setUploadResult] = useState<ExcelUploadResponse | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Load user info on component mount
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const user = await api.getCurrentUser();
+        setCurrentUser(user);
+        setUserType(user.type || 'admin');
+        
+        // If teacher, auto-fill teacher name and load their assignments
+        if (user.type === 'teacher') {
+          setFormData(prev => ({ ...prev, teacher_name: user.name }));
+          
+          // Load teacher's assignments
+          const assignments = await api.getMyTeacherAssignments();
+          setTeacherAssignments(assignments);
+          
+          // Get unique subjects from assignments
+          const uniqueSubjects = Array.from(
+            new Map(assignments.map((a: any) => [a.subject_id, { id: a.subject_id, name: a.subject_name }])).values()
+          );
+          setSubjects(uniqueSubjects as Subject[]);
+        }
+      } catch (error) {
+        console.error('Failed to load user:', error);
+      }
+    };
+    loadUser();
+  }, []);
 
   // Load initial data
   useEffect(() => {
@@ -124,13 +156,27 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [gradesData, subjectsData] = await Promise.all([
-        api.getAllGrades(),
-        api.getAllSubjects()
-      ]);
-      
-      setGrades(gradesData);
-      setSubjects(subjectsData);
+      // For teachers, grades come from their assignments
+      if (userType === 'teacher') {
+        const gradesData = await api.getAllGrades();
+        // Filter grades based on teacher's assignments
+        const assignedGradeIds = new Set(
+          teacherAssignments
+            .filter((a: any) => a.grade_id)
+            .map((a: any) => a.grade_id)
+        );
+        const filteredGrades = gradesData.filter((g: any) => assignedGradeIds.has(g.id));
+        setGrades(filteredGrades);
+      } else {
+        // For admins, load all
+        const [gradesData, subjectsData] = await Promise.all([
+          api.getAllGrades(),
+          api.getAllSubjects()
+        ]);
+        
+        setGrades(gradesData);
+        setSubjects(subjectsData);
+      }
     } catch (error) {
       console.error('Failed to load initial data:', error);
       toast.error('Не удалось загрузить данные');
@@ -166,7 +212,8 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
     
     if (!formData.grade_id) errors.push('Выберите класс');
     if (!formData.subject_id) errors.push('Выберите предмет');
-    if (!formData.teacher_name.trim()) errors.push('Введите имя учителя');
+    // Only check teacher name for admins (teachers have it auto-filled)
+    if (userType === 'admin' && !formData.teacher_name.trim()) errors.push('Введите имя учителя');
     if (!formData.file) errors.push('Выберите файл Excel');
     if (formData.file && !formData.file.name.match(/\.(xlsx|xls)$/i)) {
       errors.push('Файл должен быть в формате Excel (.xlsx или .xls)');
@@ -375,26 +422,28 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
                   </Select>
                 </div>
 
-                {/* Teacher Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="teacher-select">Имя учителя *</Label>
-                  <Select
-                    value={formData.teacher_name || ''}
-                    onValueChange={(value) => handleInputChange('teacher_name', value)}
-                    disabled={!formData.subject_id || loadingTeachers}
-                  >
-                    <SelectTrigger id="teacher-select">
-                      <SelectValue placeholder={loadingTeachers ? 'Загрузка...' : (teacherNames.length ? 'Выберите учителя' : 'Нет учителей для предмета')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teacherNames.map((name) => (
-                        <SelectItem key={name} value={name}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Teacher Selection - Only for admins */}
+                {userType === 'admin' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="teacher-select">Имя учителя *</Label>
+                    <Select
+                      value={formData.teacher_name || ''}
+                      onValueChange={(value) => handleInputChange('teacher_name', value)}
+                      disabled={!formData.subject_id || loadingTeachers}
+                    >
+                      <SelectTrigger id="teacher-select">
+                        <SelectValue placeholder={loadingTeachers ? 'Загрузка...' : (teacherNames.length ? 'Выберите учителя' : 'Нет учителей для предмета')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {teacherNames.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Quarter */}
                 <div className="space-y-2">

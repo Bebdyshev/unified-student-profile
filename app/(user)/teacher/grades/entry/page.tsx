@@ -16,10 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Save, ArrowLeft } from 'lucide-react';
+import { Save, ArrowLeft, Upload } from 'lucide-react';
 import { handleApiError } from '@/utils/errorHandler';
 import api from '@/lib/api';
 import Link from 'next/link';
+import { UploadScores } from '@/app/(user)/dashboard/classes/_components/upload-scores';
 
 interface TeacherAssignment {
   id: number;
@@ -230,16 +231,32 @@ function TeacherGradeEntryContent() {
   return (
     <PageContainer scrollable>
       <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href="/teacher/dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold">Ввод оценок</h1>
-            <p className="text-gray-500">Введите оценки для ваших студентов</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/teacher/dashboard">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold">Ввод оценок</h1>
+              <p className="text-gray-500">Введите оценки для ваших студентов</p>
+            </div>
           </div>
+          <UploadScores
+            onUploadComplete={() => {
+              fetchAssignments();
+              if (selectedSubjectId && selectedGradeId) {
+                fetchStudents();
+              }
+            }}
+            trigger={
+              <Button variant="outline" className="gap-2">
+                <Upload className="h-4 w-4" />
+                Загрузить Excel
+              </Button>
+            }
+          />
         </div>
 
       {/* Filters */}
