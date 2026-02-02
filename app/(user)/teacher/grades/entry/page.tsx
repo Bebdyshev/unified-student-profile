@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -227,18 +228,19 @@ function TeacherGradeEntryContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/teacher/dashboard">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Ввод оценок</h1>
-          <p className="text-gray-500">Введите оценки для ваших студентов</p>
+    <PageContainer scrollable>
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link href="/teacher/dashboard">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold">Ввод оценок</h1>
+            <p className="text-gray-500">Введите оценки для ваших студентов</p>
+          </div>
         </div>
-      </div>
 
       {/* Filters */}
       <Card>
@@ -371,7 +373,8 @@ function TeacherGradeEntryContent() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </PageContainer>
   );
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -75,18 +76,21 @@ export default function TeacherClassesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-lg">Загрузка...</div>
-      </div>
+      <PageContainer scrollable>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-lg">Загрузка...</div>
+        </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Мои классы</h1>
-        <p className="text-gray-500">Классы, в которых вы преподаёте</p>
-      </div>
+    <PageContainer scrollable>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">Мои классы</h1>
+          <p className="text-gray-500">Классы, в которых вы преподаёте</p>
+        </div>
 
       {groupedAssignments.length === 0 ? (
         <Card>
@@ -137,6 +141,7 @@ export default function TeacherClassesPage() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </PageContainer>
   );
 }

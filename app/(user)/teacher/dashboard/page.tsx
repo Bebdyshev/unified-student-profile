@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -76,13 +77,14 @@ export default function TeacherDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold">Панель учителя</h1>
-          <p className="text-gray-500">Добро пожаловать! Здесь вы можете управлять оценками ваших студентов.</p>
+    <PageContainer scrollable>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">Панель учителя</h1>
+            <p className="text-gray-500">Добро пожаловать! Здесь вы можете управлять оценками ваших студентов.</p>
+          </div>
         </div>
-      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -195,6 +197,7 @@ export default function TeacherDashboardPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </PageContainer>
   );
 }

@@ -118,22 +118,49 @@ export default function AppSidebar({
                   const navItem = item as any;
                   const userType = userInfo?.type || 'user';
                   
-                  // If teacherOnly, show only for teachers and admins
-                  if (navItem.teacherOnly) {
-                    return userType === 'teacher' || userType === 'admin';
+                  // For teachers, show only teacher-specific items and basic dashboard
+                  if (userType === 'teacher') {
+                    // Show teacher-specific items
+                    if (navItem.teacherOnly) {
+                      return true;
+                    }
+                    // Hide admin-only items
+                    if (navItem.adminOnly || item.url === '/admin/settings') {
+                      return false;
+                    }
+                    // Hide admin/management items for teachers (they have their own dashboard)
+                    if (item.url === '/dashboard' ||
+                        item.url === '/dashboard/classes' || 
+                        item.url === '/dashboard/users' ||
+                        item.url === '/dashboard/subjects') {
+                      return false;
+                    }
+                    // Allow students view
+                    return true;
                   }
                   
-                  // If adminOnly, show only for admins
+                  // For admins, show everything
+                  if (userType === 'admin') {
+                    return true;
+                  }
+                  
+                  // For regular users
+                  // If teacherOnly, don't show
+                  if (navItem.teacherOnly) {
+                    return false;
+                  }
+                  
+                  // If adminOnly, don't show
                   if (navItem.adminOnly) {
-                    return userType === 'admin';
+                    return false;
                   }
                   
                   // Hide admin settings from non-admins
                   if (item.url === '/admin/settings') {
-                    return userType === 'admin';
+                    return false;
                   }
                   
-                  // Show all other items to everyone
+                  // Show all other items
                   return true;
                 })
                 .map((item) => {
