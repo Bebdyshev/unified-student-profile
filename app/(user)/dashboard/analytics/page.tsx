@@ -1407,6 +1407,19 @@ export default function AnalyticsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Student List Modal */}
+      <StudentListModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        students={modalStudents}
+        grades={data.grades}
+        onStudentClick={(studentId) => {
+          console.log('Student clicked:', studentId);
+          // TODO: Navigate to student details or show more info
+        }}
+      />
     </PageContainer>
   );
 }
