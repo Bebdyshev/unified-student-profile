@@ -237,7 +237,7 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
 
         <Card 
           className={`${insights.summary.at_risk_count > 0 ? 'border-orange-200' : ''} cursor-pointer hover:shadow-md transition-shadow`}
-          onClick={() => navigateToStudentsWithFilter(2)}
+          onClick={() => navigateToStudentsWithFilter(1)}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">В зоне риска</CardTitle>
@@ -254,10 +254,10 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
 
         <Card 
           className={`${insights.summary.critical_count > 0 ? 'border-red-200' : ''} cursor-pointer hover:shadow-md transition-shadow`}
-          onClick={() => navigateToStudentsWithFilter(3)}
+          onClick={() => navigateToStudentsWithFilter(2)}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Критические случаи</CardTitle>
+            <CardTitle className="text-sm font-medium">Опасные случаи</CardTitle>
             <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
