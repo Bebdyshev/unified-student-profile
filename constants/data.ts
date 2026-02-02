@@ -159,6 +159,22 @@ export const navItems: NavItem[] = [
     teacherOnly: true
   },
   {
+    title: 'Мои классы',
+    url: '/teacher/classes',
+    icon: 'school',
+    isActive: false,
+    items: [],
+    teacherOnly: true
+  },
+  {
+    title: 'Ввод оценок',
+    url: '/teacher/grades/entry',
+    icon: 'fileEdit',
+    isActive: false,
+    items: [],
+    teacherOnly: true
+  },
+  {
     title: 'Настройки системы',
     url: '/admin/settings',
     icon: 'settings',

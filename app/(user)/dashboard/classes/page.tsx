@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { toast } from 'react-toastify';
+import { useAuth } from '@/hooks/use-auth';
 import {
   Dialog,
   DialogContent,
@@ -58,7 +59,10 @@ interface CreateGradePayload {
 }
 
 export default function ClassManagementPage() {
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const [user, setUser] = useState<any>(null);
+  const [authCheckLoading, setAuthCheckLoading] = useState(true);
   const [grades, setGrades] = useState<LocalGrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,10 +96,39 @@ export default function ClassManagementPage() {
     return Array.from(lettersSet);
   }, [availableClasses, selectedParallel]);
 
+  // Check user authentication and authorization
   useEffect(() => {
-    fetchGrades();
-    fetchCurators();
-  }, []);
+    const loadUser = async () => {
+      if (isAuthenticated && !authLoading) {
+        try {
+          const userData = await api.getCurrentUser();
+          setUser(userData);
+        } catch (error) {
+          router.push('/signin');
+        } finally {
+          setAuthCheckLoading(false);
+        }
+      } else if (!authLoading) {
+        setAuthCheckLoading(false);
+      }
+    };
+    
+    loadUser();
+  }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (!authCheckLoading && user && user.type !== 'admin') {
+      toast.error('Доступ запрещен. Только администраторы могут управлять классами.');
+      router.push('/dashboard');
+    }
+  }, [user, authCheckLoading, router]);
+
+  useEffect(() => {
+    if (user && user.type === 'admin') {
+      fetchGrades();
+      fetchCurators();
+    }
+  }, [user]);
 
   const fetchCurators = async () => {
     try {
@@ -250,6 +283,24 @@ export default function ClassManagementPage() {
     
     window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
   };
+
+  // Show loading while checking authentication
+  if (authCheckLoading || authLoading) {
+    return (
+      <PageContainer scrollable>
+        <div className="flex items-center justify-center h-[400px]">
+          <div className="text-center">
+            <p className="text-gray-500">Загрузка...</p>
+          </div>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  // Deny access if not admin
+  if (!user || user.type !== 'admin') {
+    return null;
+  }
 
   return (
     <PageContainer scrollable>

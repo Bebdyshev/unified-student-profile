@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,11 +9,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Pencil, Trash2, Plus } from 'lucide-react';
+import { toast } from 'react-toastify';
+import { useAuth } from '@/hooks/use-auth';
 import api from '@/lib/api';
 import type { Subject } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function SubjectsPage() {
+  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const [user, setUser] = useState<any>(null);
+  const [authCheckLoading, setAuthCheckLoading] = useState(true);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,9 +28,38 @@ export default function SubjectsPage() {
   const [current, setCurrent] = useState<Subject | null>(null);
   const [form, setForm] = useState<{ name: string; description?: string; applicable_parallels: number[] }>({ name: '', applicable_parallels: Array.from({ length: 6 }, (_, i) => i + 7) });
 
+  // Check user authentication and authorization
   useEffect(() => {
-    fetchSubjects();
-  }, []);
+    const loadUser = async () => {
+      if (isAuthenticated && !authLoading) {
+        try {
+          const userData = await api.getCurrentUser();
+          setUser(userData);
+        } catch (error) {
+          router.push('/signin');
+        } finally {
+          setAuthCheckLoading(false);
+        }
+      } else if (!authLoading) {
+        setAuthCheckLoading(false);
+      }
+    };
+    
+    loadUser();
+  }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (!authCheckLoading && user && user.type !== 'admin') {
+      toast.error('Доступ запрещен. Только администраторы могут управлять предметами.');
+      router.push('/dashboard');
+    }
+  }, [user, authCheckLoading, router]);
+
+  useEffect(() => {
+    if (user && user.type === 'admin') {
+      fetchSubjects();
+    }
+  }, [user]);
 
   const fetchSubjects = async () => {
     setLoading(true);
@@ -78,6 +114,22 @@ export default function SubjectsPage() {
       await fetchSubjects();
     } catch (e) {}
   };
+
+  if (authCheckLoading || authLoading) {
+    return (
+      <PageContainer scrollable>
+        <div className="py-4">
+          <Card>
+            <CardContent className="p-6 text-center">Проверка доступа...</CardContent>
+          </Card>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  if (!user || user.type !== 'admin') {
+    return null;
+  }
 
   return (
     <PageContainer scrollable>

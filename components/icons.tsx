@@ -9,6 +9,7 @@ import {
   CreditCard,
   File,
   FileText,
+  FileEdit,
   HelpCircle,
   Image,
   Laptop,
@@ -36,7 +37,8 @@ import {
   Mail,
   X,
   GraduationCap,
-  UserCheck
+  UserCheck,
+  School
 } from 'lucide-react';
 export type Icon = LucideIcon;
 
@@ -75,6 +77,8 @@ export const Icons = {
   mail: Mail,
   graduationCap: GraduationCap,
   userCheck: UserCheck,
+  school: School,
+  fileEdit: FileEdit,
   gitHub: ({ ...props }: LucideProps) => (
     <svg
       aria-hidden="true"

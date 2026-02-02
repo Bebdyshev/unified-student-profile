@@ -1,20 +1,58 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useAuth } from '@/hooks/use-auth';
+import { toast } from 'react-toastify';
 import api, { ClassData, Student } from '@/lib/api';
 
 export default function ClassPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const classParam = searchParams.get('class');
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const [user, setUser] = useState<any>(null);
+  const [authCheckLoading, setAuthCheckLoading] = useState(true);
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Check user authentication and authorization
   useEffect(() => {
-    const fetchClassData = async () => {
+    const loadUser = async () => {
+      if (isAuthenticated && !authLoading) {
+        try {
+          const userData = await api.getCurrentUser();
+          setUser(userData);
+        } catch (error) {
+          router.push('/signin');
+        } finally {
+          setAuthCheckLoading(false);
+        }
+      } else if (!authLoading) {
+        setAuthCheckLoading(false);
+      }
+    };
+    
+    loadUser();
+  }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (!authCheckLoading && user && user.type !== 'admin') {
+      toast.error('Доступ запрещен. Только администраторы могут просматривать детали класса.');
+      router.push('/dashboard');
+    }
+  }, [user, authCheckLoading, router]);
+
+  useEffect(() => {
+    if (user && user.type === 'admin') {
+      fetchClassData();
+    }
+  }, [user, classParam]);
+
+  const fetchClassData = async () => {
       if (!classParam) {
         setError('Класс не указан');
         setLoading(false);
@@ -36,9 +74,6 @@ export default function ClassPage() {
       }
     };
 
-    fetchClassData();
-  }, [classParam]);
-
   const getDangerLevelColor = (level: number) => {
     if (level >= 2.5) return 'text-red-500';
     if (level >= 1.5) return 'text-yellow-500';
@@ -50,6 +85,20 @@ export default function ClassPage() {
     if (level >= 1.5) return 'bg-yellow-100';
     return 'bg-orange-100';
   };
+
+  if (authCheckLoading || authLoading) {
+    return (
+      <PageContainer>
+        <div className="flex items-center justify-center h-full">
+          <p className="text-lg">Проверка доступа...</p>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  if (!user || user.type !== 'admin') {
+    return null;
+  }
 
   if (loading) {
     return (

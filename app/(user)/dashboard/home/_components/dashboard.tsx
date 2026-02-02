@@ -10,12 +10,17 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card';
+import { useAuth } from '@/hooks/use-auth';
+import { toast } from 'react-toastify';
 import api from "@/lib/api";
 import TableContainer from './table';
 import ChartContainer from './piechart';
 
 export default function DashBoardPage() {
   const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const [user, setUser] = useState<any>(null);
+  const [authCheckLoading, setAuthCheckLoading] = useState(true);
   const [dangerLevels, setDangerLevels] = useState({
     level0: 0,
     level1: 0,
@@ -26,8 +31,40 @@ export default function DashBoardPage() {
   const [classDangerPercentages, setClassDangerPercentages] = useState<any[]>([]);
   const [gradeIdMap, setGradeIdMap] = useState<Map<string, number>>(new Map());
 
+  // Check user authentication and authorization
   useEffect(() => {
-    const fetchData = async () => {
+    const loadUser = async () => {
+      if (isAuthenticated && !authLoading) {
+        try {
+          const userData = await api.getCurrentUser();
+          setUser(userData);
+        } catch (error) {
+          router.push('/signin');
+        } finally {
+          setAuthCheckLoading(false);
+        }
+      } else if (!authLoading) {
+        setAuthCheckLoading(false);
+      }
+    };
+    
+    loadUser();
+  }, [isAuthenticated, authLoading, router]);
+
+  useEffect(() => {
+    if (!authCheckLoading && user && user.type !== 'admin') {
+      toast.error('Доступ запрещен. Только администраторы могут просматривать панель управления.');
+      router.push('/teacher/dashboard');
+    }
+  }, [user, authCheckLoading, router]);
+
+  useEffect(() => {
+    if (user && user.type === 'admin') {
+      fetchData();
+    }
+  }, [user]);
+
+  const fetchData = async () => {
       try {
         // First fetch all grades to get ID mapping
         const allGrades = await api.getAllGrades();
@@ -65,8 +102,21 @@ export default function DashBoardPage() {
       }
     };
 
-    fetchData();
-  }, []);
+  if (authCheckLoading || authLoading) {
+    return (
+      <PageContainer scrollable>
+        <div className="py-4">
+          <Card>
+            <CardContent className="p-6 text-center">Проверка доступа...</CardContent>
+          </Card>
+        </div>
+      </PageContainer>
+    );
+  }
+
+  if (!user || user.type !== 'admin') {
+    return null;
+  }
 
   return (
     <PageContainer scrollable>
