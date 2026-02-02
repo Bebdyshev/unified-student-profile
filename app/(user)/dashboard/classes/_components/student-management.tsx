@@ -287,9 +287,36 @@ export default function StudentManagement({ grades, onRefreshGrades, initialFilt
     }
   };
 
-  const handleEditScoreClick = (score: Score) => {
-    setEditingScore(score);
-    setScoreFormData(score.actual_scores || {});
+  const handleEditScoreClick = async (student: Student) => {
+    if (!student.score_id) {
+      toast.error('Оценка не найдена');
+      return;
+    }
+    setCurrentStudent(student);
+    // Use actual_scores from the student object if available
+    const scores = student.actual_scores || {};
+    // Convert array to object with q1, q2, q3, q4 keys if it's an array
+    if (Array.isArray(scores)) {
+      const scoreObj: Record<string, number> = {};
+      scores.forEach((val, idx) => {
+        scoreObj[`q${idx + 1}`] = val ?? 0;
+      });
+      setScoreFormData(scoreObj);
+    } else {
+      setScoreFormData(scores);
+    }
+    setEditingScore({
+      id: student.score_id,
+      student_id: student.id,
+      teacher_name: '',
+      subject_name: student.last_subject || '',
+      actual_scores: student.actual_scores || null,
+      predicted_scores: null,
+      danger_level: student.danger_level ?? 0,
+      delta_percentage: student.delta_percentage ?? null,
+      semester: student.last_semester ?? 1
+    });
+    setIsScoreDialogOpen(true);
   };
 
   const handleScoreInputChange = (key: string, value: string) => {
@@ -576,28 +603,41 @@ export default function StudentManagement({ grades, onRefreshGrades, initialFilt
                                 </Badge>
                               ) : '-'}
                             </td>
-                            {idx === 0 && (
-                              <td className="p-3 border border-gray-200 text-right space-x-1" rowSpan={details.length}>
+                            <td className="p-3 border border-gray-200 text-right space-x-1">
+                              {detail.score_id && (
                                 <Button 
                                   variant="outline" 
                                   size="icon" 
-                                  onClick={() => student && handleEditClick(student)}
-                                  className="h-8 w-8"
-                                  title="Редактировать студента"
+                                  onClick={() => handleEditScoreClick(detail)}
+                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  title="Редактировать оценки"
                                 >
-                                  <Pencil size={16} />
+                                  <FileEdit size={16} />
                                 </Button>
-                                <Button 
-                                  variant="outline" 
-                                  size="icon" 
-                                  onClick={() => student && handleDeleteClick(student)}
-                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  title="Удалить студента"
-                                >
-                                  <Trash2 size={16} />
-                                </Button>
-                              </td>
-                            )}
+                              )}
+                              {idx === 0 && (
+                                <>
+                                  <Button 
+                                    variant="outline" 
+                                    size="icon" 
+                                    onClick={() => student && handleEditClick(student)}
+                                    className="h-8 w-8"
+                                    title="Редактировать студента"
+                                  >
+                                    <Pencil size={16} />
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="icon" 
+                                    onClick={() => student && handleDeleteClick(student)}
+                                    className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    title="Удалить студента"
+                                  >
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </>
+                              )}
+                            </td>
                           </tr>
                         ));
                       });
@@ -661,6 +701,17 @@ export default function StudentManagement({ grades, onRefreshGrades, initialFilt
                             ) : '-'}
                           </td>
                         <td className="p-3 border-b border-gray-200 text-right space-x-1">
+                          {student.score_id && (
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              onClick={() => handleEditScoreClick(student)}
+                              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              title="Редактировать оценки"
+                            >
+                              <FileEdit size={16} />
+                            </Button>
+                          )}
                           <Button 
                             variant="outline" 
                             size="icon" 
@@ -835,6 +886,68 @@ export default function StudentManagement({ grades, onRefreshGrades, initialFilt
               onClick={handleDeleteStudent}
             >
               Удалить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Score Editing Dialog */}
+      <Dialog open={isScoreDialogOpen} onOpenChange={(open) => {
+        setIsScoreDialogOpen(open);
+        if (!open) {
+          setEditingScore(null);
+          setScoreFormData({});
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Редактировать оценки</DialogTitle>
+            <DialogDescription>
+              Студент: {currentStudent?.name}
+              {editingScore?.subject_name && ` • ${editingScore.subject_name}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 gap-3">
+              {['q1', 'q2', 'q3', 'q4'].map((quarter, index) => (
+                <div key={quarter} className="flex flex-col gap-1">
+                  <Label htmlFor={`score-${quarter}`} className="text-center text-sm">
+                    {index + 1} чет.
+                  </Label>
+                  <Input
+                    id={`score-${quarter}`}
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="0"
+                    value={scoreFormData[quarter] || ''}
+                    onChange={(e) => handleScoreInputChange(quarter, e.target.value)}
+                    className="text-center"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-sm text-gray-500 text-center">
+              Введите проценты от 0 до 100 для каждой четверти
+            </p>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsScoreDialogOpen(false);
+                setEditingScore(null);
+                setScoreFormData({});
+              }}
+            >
+              Отмена
+            </Button>
+            <Button 
+              onClick={handleSaveScore}
+              disabled={!editingScore}
+            >
+              Сохранить
             </Button>
           </DialogFooter>
         </DialogContent>
