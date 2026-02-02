@@ -58,9 +58,15 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
   const [selectedGradeId, setSelectedGradeId] = useState<number | null>(null);
   const [selectedParallel, setSelectedParallel] = useState<string>('all');
   const [students, setStudents] = useState<Student[]>([]);
+  const [studentDetails, setStudentDetails] = useState<Student[]>([]);
+  const [isAllSubjects, setIsAllSubjects] = useState(false);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [loading, setLoading] = useState(false);
+  
+  const uniqueStudentCount = isAllSubjects 
+    ? students.length 
+    : new Set(students.map(s => s.id)).size;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
@@ -115,8 +121,16 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
         params.parallel = selectedParallel;
       }
       
-      const studentsData = await api.getStudentsUnified(params);
-      setStudents(studentsData);
+      const data = await api.getStudentsUnified(params);
+      if (selectedSubject === 'all' && data.summary && data.details) {
+        setStudents(data.summary);
+        setStudentDetails(data.details);
+        setIsAllSubjects(true);
+      } else {
+        setStudents(Array.isArray(data) ? data : []);
+        setStudentDetails([]);
+        setIsAllSubjects(false);
+      }
     } catch (err) {
       const apiError = handleApiError(err);
       toast.error(`Ошибка загрузки студентов: ${apiError.message}`);
@@ -188,7 +202,7 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
     try {
       // Нужно добавить этот метод в API, пока используем прямой вызов
       await api.updateGrade(selectedGradeId, {
-        studentCount: students.length
+        studentCount: uniqueStudentCount
       });
       toast.success('Количество студентов обновлено');
       onRefreshGrades();
@@ -302,9 +316,9 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
               </div>
             </CardTitle>
             <CardDescription>
-              Фактическое количество студентов: {students.length} | 
+              Фактическое количество студентов: {uniqueStudentCount} | 
               Записанное количество: {selectedGrade.studentCount || 0}
-              {students.length !== (selectedGrade.studentCount || 0) && (
+              {uniqueStudentCount !== (selectedGrade.studentCount || 0) && (
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -324,8 +338,18 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
         <Card>
           <CardHeader>
             <CardTitle>Студенты</CardTitle>
-            <CardDescription>
-              {loading ? 'Загрузка...' : `Всего студентов: ${students.length}`}
+            <CardDescription className="flex items-center gap-2">
+              {loading ? 'Загрузка...' : (
+                <>
+                  <span>Студентов: {uniqueStudentCount}</span>
+                  {isAllSubjects && (
+                    <>
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <span>Записей по предметам: {studentDetails.length}</span>
+                    </>
+                  )}
+                </>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -347,46 +371,54 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border-b border-gray-200 font-semibold">ID</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Имя</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Email</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Предмет</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Четверть</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Средний факт %</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Предикт %</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Δ%</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold">Риск</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold text-right">Действия</th>
-                    </tr>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">ID</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">Имя</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">Email</th>
+                        {!isAllSubjects && (
+                          <>
+                            <th className="p-3 border-b border-gray-200 font-semibold text-sm">Предмет</th>
+                            <th className="p-3 border-b border-gray-200 font-semibold text-sm">Четверть</th>
+                          </>
+                        )}
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Средний %</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Предикт %</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Δ%</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">Риск</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-right text-sm">Действия</th>
+                      </tr>
                   </thead>
                   <tbody>
                     {students.map(student => (
                       <tr key={student.id} className="hover:bg-gray-50">
-                        <td className="p-3 border-b border-gray-200 font-mono text-sm">{student.id}</td>
-                        <td className="p-3 border-b border-gray-200 font-medium">{student.name}</td>
-                        <td className="p-3 border-b border-gray-200 text-gray-600">
-                          {student.email || 'Не указан'}
-                        </td>
-                        <td className="p-3 border-b border-gray-200 text-gray-600">{student.last_subject || '-'}</td>
-                        <td className="p-3 border-b border-gray-200 text-gray-600">{student.last_semester ? `${student.last_semester}` : '-'}</td>
-                        <td className="p-3 border-b border-gray-200">{student.avg_percentage ?? '-'}</td>
-                        <td className="p-3 border-b border-gray-200">{student.predicted_avg ?? '-'}</td>
-                        <td className="p-3 border-b border-gray-200">{student.delta_percentage ?? '-'}</td>
-                        <td className="p-3 border-b border-gray-200">
-                          {typeof student.danger_level === 'number' ? (
-                            <Badge
-                              className={
-                                student.danger_level === 0 ? 'bg-green-100 text-green-800' :
-                                student.danger_level === 1 ? 'bg-yellow-100 text-yellow-800' :
-                                student.danger_level === 2 ? 'bg-orange-100 text-orange-800' :
-                                'bg-red-100 text-red-800'
-                              }
-                            >
-                              {student.danger_level === 0 ? 'Низкий' : student.danger_level === 1 ? 'Умеренный' : student.danger_level === 2 ? 'Высокий' : 'Критический'}
-                            </Badge>
-                          ) : '-'}
-                        </td>
+                          <td className="p-3 border-b border-gray-200 font-mono text-sm">{student.id}</td>
+                          <td className="p-3 border-b border-gray-200 font-medium">{student.name}</td>
+                          <td className="p-3 border-b border-gray-200 text-gray-600">
+                            {student.email || 'Не указан'}
+                          </td>
+                          {!isAllSubjects && (
+                            <>
+                              <td className="p-3 border-b border-gray-200 text-gray-600">{student.last_subject || '-'}</td>
+                              <td className="p-3 border-b border-gray-200 text-gray-600">{student.last_semester ? `${student.last_semester}` : '-'}</td>
+                            </>
+                          )}
+                          <td className="p-3 border-b border-gray-200 text-center">{student.avg_percentage ?? '-'}</td>
+                          <td className="p-3 border-b border-gray-200 text-center">{student.predicted_avg ?? '-'}</td>
+                          <td className="p-3 border-b border-gray-200 text-center">{student.delta_percentage ?? '-'}</td>
+                          <td className="p-3 border-b border-gray-200">
+                            {typeof student.danger_level === 'number' ? (
+                              <Badge
+                                className={
+                                  student.danger_level === 0 ? 'bg-green-100 text-green-800' :
+                                  student.danger_level === 1 ? 'bg-yellow-100 text-yellow-800' :
+                                  student.danger_level === 2 ? 'bg-orange-100 text-orange-800' :
+                                  'bg-red-100 text-red-800'
+                                }
+                              >
+                                {student.danger_level === 0 ? 'Низкий' : student.danger_level === 1 ? 'Умеренный' : student.danger_level === 2 ? 'Высокий' : 'Критический'}
+                              </Badge>
+                            ) : '-'}
+                          </td>
                         <td className="p-3 border-b border-gray-200 text-right">
                           <Button 
                             variant="outline" 
@@ -404,6 +436,77 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
                 </table>
               </div>
             )}
+
+            {isAllSubjects && studentDetails.length > 0 && (
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Детализация по предметам</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-gray-200">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">Имя</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">Предмет</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Средний %</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Предикт %</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Δ%</th>
+                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Риск</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        // Group details by student ID
+                        const groupedDetails: Record<number, Student[]> = {};
+                        studentDetails.forEach(detail => {
+                          if (!groupedDetails[detail.id]) {
+                            groupedDetails[detail.id] = [];
+                          }
+                          groupedDetails[detail.id].push(detail);
+                        });
+
+                        const studentIds = Object.keys(groupedDetails).map(Number);
+                        
+                        return studentIds.flatMap(studentId => {
+                          const details = groupedDetails[studentId];
+                          return details.map((detail, idx) => (
+                            <tr key={`${detail.id}-${detail.last_subject}-${idx}`} className="hover:bg-gray-50 text-sm">
+                              {idx === 0 && (
+                                <td 
+                                  className="p-3 border border-gray-200 font-medium bg-white" 
+                                  rowSpan={details.length}
+                                >
+                                  {detail.name}
+                                </td>
+                              )}
+                              <td className="p-3 border border-gray-200 text-gray-600">{detail.last_subject}</td>
+                              <td className="p-3 border border-gray-200 text-center">{detail.avg_percentage ?? '-'}</td>
+                              <td className="p-3 border border-gray-200 text-center">{detail.predicted_avg ?? '-'}</td>
+                              <td className="p-3 border border-gray-200 text-center">{detail.delta_percentage ?? '-'}</td>
+                              <td className="p-3 border border-gray-200 text-center">
+                                {typeof detail.danger_level === 'number' ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={
+                                      detail.danger_level === 0 ? 'border-green-200 text-green-700' :
+                                      detail.danger_level === 1 ? 'border-yellow-200 text-yellow-700' :
+                                      detail.danger_level === 2 ? 'border-orange-200 text-orange-700' :
+                                      'border-red-200 text-red-700'
+                                    }
+                                  >
+                                    {detail.danger_level === 0 ? 'Низкий' : detail.danger_level === 1 ? 'Умеренный' : detail.danger_level === 2 ? 'Высокий' : 'Критический'}
+                                  </Badge>
+                                ) : '-'}
+                              </td>
+                            </tr>
+                          ));
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) }
           </CardContent>
         </Card>
       )}

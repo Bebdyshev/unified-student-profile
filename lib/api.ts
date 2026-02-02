@@ -601,13 +601,13 @@ class ApiService {
     }
   }
 
-  async getStudentsUnified(params: { grade_id?: number; parallel?: string; subject?: string }): Promise<any[]> {
+  async getStudentsUnified(params: { grade_id?: number; parallel?: string; subject?: string }): Promise<any> {
     try {
       const filteredParams = {
         ...params,
         subject: params.subject === 'all' ? undefined : params.subject
       };
-      const response: AxiosResponse<any[]> = await apiClient.get('/grades/students-list', { params: filteredParams });
+      const response: AxiosResponse<any> = await apiClient.get('/grades/students-list', { params: filteredParams });
       return response.data;
     } catch (error) {
       throw handleApiError(error);
