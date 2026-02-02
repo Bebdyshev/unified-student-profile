@@ -213,21 +213,41 @@ export default function ClassManagementPage() {
   };
 
   const [currentTab, setCurrentTab] = useState("classes");
+  
+  // Student filters state (can be set from analytics or URL)
+  const [studentFilters, setStudentFilters] = useState<{
+    parallel?: string;
+    gradeId?: number;
+    dangerLevel?: number;
+  }>({});
 
-  // Handle URL query param for initial tab
+  // Handle URL query param for initial tab and filters
   const searchParams = useSearchParams();
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab && ['classes', 'students', 'analytics'].includes(tab)) {
       setCurrentTab(tab);
     }
+    
+    // Parse student filters from URL
+    const parallel = searchParams.get('parallel');
+    const gradeId = searchParams.get('gradeId');
+    const dangerLevel = searchParams.get('danger');
+    
+    setStudentFilters({
+      parallel: parallel || undefined,
+      gradeId: gradeId ? parseInt(gradeId) : undefined,
+      dangerLevel: dangerLevel ? parseInt(dangerLevel) : undefined
+    });
   }, [searchParams]);
 
   const handleTabChange = (value: string) => {
     setCurrentTab(value);
-    // Optional: update URL query param
-    const params = new URLSearchParams(window.location.search);
+    
+    // Update URL query param
+    const params = new URLSearchParams();
     params.set('tab', value);
+    
     window.history.pushState({}, '', `${window.location.pathname}?${params.toString()}`);
   };
 
@@ -399,6 +419,7 @@ export default function ClassManagementPage() {
                 actualStudentCount: g.actual_student_count
               }))}
               onRefreshGrades={fetchGrades}
+              initialFilters={studentFilters}
             />
           </TabsContent>
 

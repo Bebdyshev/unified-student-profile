@@ -112,8 +112,11 @@ export interface CreateStudentRequest {
 
 export interface UpdateStudentRequest {
   name?: string;
-  parallel?: string;
-  class_name?: string;
+  email?: string;
+  student_id_number?: string;
+  phone?: string;
+  parent_contact?: string;
+  is_active?: number;
 }
 
 // Grade types

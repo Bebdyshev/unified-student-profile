@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Users, Upload, Download } from 'lucide-react';
+import { Pencil, Trash2, Plus, Users, Upload, Download, Filter } from 'lucide-react';
 import { handleApiError } from '@/utils/errorHandler';
 import api from '@/lib/api';
 
@@ -52,11 +52,17 @@ interface Grade {
 interface StudentManagementProps {
   grades: Grade[];
   onRefreshGrades: () => void;
+  initialFilters?: {
+    parallel?: string;
+    gradeId?: number;
+    dangerLevel?: number;
+  };
 }
 
-export default function StudentManagement({ grades, onRefreshGrades }: StudentManagementProps) {
-  const [selectedGradeId, setSelectedGradeId] = useState<number | null>(null);
-  const [selectedParallel, setSelectedParallel] = useState<string>('all');
+export default function StudentManagement({ grades, onRefreshGrades, initialFilters }: StudentManagementProps) {
+  const [selectedGradeId, setSelectedGradeId] = useState<number | null>(initialFilters?.gradeId || null);
+  const [selectedParallel, setSelectedParallel] = useState<string>(initialFilters?.parallel || 'all');
+  const [dangerFilter, setDangerFilter] = useState<number | null>(initialFilters?.dangerLevel ?? null);
   const [students, setStudents] = useState<Student[]>([]);
   const [studentDetails, setStudentDetails] = useState<Student[]>([]);
   const [isAllSubjects, setIsAllSubjects] = useState(false);
@@ -68,14 +74,32 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
     ? students.length 
     : new Set(students.map(s => s.id)).size;
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    email: ''
+    email: '',
+    phone: '',
+    parent_contact: ''
   });
 
   const selectedGrade = grades.find(g => g.id === selectedGradeId);
+
+  // Apply initial filters when they change (e.g., from analytics navigation)
+  useEffect(() => {
+    if (initialFilters) {
+      if (initialFilters.parallel !== undefined) {
+        setSelectedParallel(initialFilters.parallel || 'all');
+      }
+      if (initialFilters.gradeId !== undefined) {
+        setSelectedGradeId(initialFilters.gradeId || null);
+      }
+      if (initialFilters.dangerLevel !== undefined) {
+        setDangerFilter(initialFilters.dangerLevel);
+      }
+    }
+  }, [initialFilters]);
 
   useEffect(() => {
     // Fetch subjects whenever the list of available grades might change or a grade is selected
@@ -145,8 +169,44 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
   };
 
   const resetForm = () => {
-    setFormData({ name: '', email: '' });
+    setFormData({ name: '', email: '', phone: '', parent_contact: '' });
     setCurrentStudent(null);
+  };
+
+  const handleEditClick = (student: Student) => {
+    setCurrentStudent(student);
+    setFormData({
+      name: student.name || '',
+      email: student.email || '',
+      phone: '',
+      parent_contact: ''
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateStudent = async () => {
+    if (!currentStudent) return;
+
+    if (!formData.name.trim()) {
+      toast.error('Введите имя студента');
+      return;
+    }
+
+    try {
+      await api.updateStudent(currentStudent.id, {
+        name: formData.name,
+        email: formData.email || undefined,
+        phone: formData.phone || undefined,
+        parent_contact: formData.parent_contact || undefined
+      });
+      toast.success('Студент успешно обновлён');
+      setIsEditDialogOpen(false);
+      resetForm();
+      fetchStudents();
+    } catch (err) {
+      const apiError = handleApiError(err);
+      toast.error(`Ошибка обновления студента: ${apiError.message}`);
+    }
   };
 
   const handleCreateStudent = async () => {
@@ -289,6 +349,25 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
               </Select>
             </div>
 
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="danger-filter">Уровень риска</Label>
+              <Select 
+                value={dangerFilter?.toString() || 'all'}
+                onValueChange={(val) => setDangerFilter(val === 'all' ? null : parseInt(val))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Все уровни" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Все уровни</SelectItem>
+                  <SelectItem value="0">Низкий</SelectItem>
+                  <SelectItem value="1">Умеренный</SelectItem>
+                  <SelectItem value="2">Высокий</SelectItem>
+                  <SelectItem value="3">Критический</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button 
               onClick={openCreateDialog} 
               disabled={!selectedGradeId}
@@ -367,7 +446,100 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
                   Добавить первого студента
                 </Button>
               </div>
+            ) : isAllSubjects && studentDetails.length > 0 ? (
+              /* Детализированная таблица по предметам - показывается когда выбраны "Все предметы" */
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-100 text-left">
+                      <th className="p-3 border-b border-gray-200 font-semibold text-sm">Имя</th>
+                      <th className="p-3 border-b border-gray-200 font-semibold text-sm">Предмет</th>
+                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Средний %</th>
+                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Предикт %</th>
+                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Δ%</th>
+                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Риск</th>
+                      <th className="p-3 border-b border-gray-200 font-semibold text-right text-sm">Действия</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      // Group details by student ID
+                      const groupedDetails: Record<number, Student[]> = {};
+                      const filteredDetails = studentDetails.filter(
+                        detail => dangerFilter === null || detail.danger_level === dangerFilter
+                      );
+                      filteredDetails.forEach(detail => {
+                        if (!groupedDetails[detail.id]) {
+                          groupedDetails[detail.id] = [];
+                        }
+                        groupedDetails[detail.id].push(detail);
+                      });
+
+                      const studentIds = Object.keys(groupedDetails).map(Number);
+                      
+                      return studentIds.flatMap(studentId => {
+                        const details = groupedDetails[studentId];
+                        const student = students.find(s => s.id === studentId);
+                        return details.map((detail, idx) => (
+                          <tr key={`${detail.id}-${detail.last_subject}-${idx}`} className="hover:bg-gray-50 text-sm">
+                            {idx === 0 && (
+                              <td 
+                                className="p-3 border border-gray-200 font-medium bg-white" 
+                                rowSpan={details.length}
+                              >
+                                {detail.name}
+                              </td>
+                            )}
+                            <td className="p-3 border border-gray-200 text-gray-600">{detail.last_subject}</td>
+                            <td className="p-3 border border-gray-200 text-center">{detail.avg_percentage ?? '-'}</td>
+                            <td className="p-3 border border-gray-200 text-center">{detail.predicted_avg ?? '-'}</td>
+                            <td className="p-3 border border-gray-200 text-center">{detail.delta_percentage ?? '-'}</td>
+                            <td className="p-3 border border-gray-200 text-center">
+                              {typeof detail.danger_level === 'number' ? (
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    detail.danger_level === 0 ? 'border-green-200 text-green-700' :
+                                    detail.danger_level === 1 ? 'border-yellow-200 text-yellow-700' :
+                                    detail.danger_level === 2 ? 'border-orange-200 text-orange-700' :
+                                    'border-red-200 text-red-700'
+                                  }
+                                >
+                                  {detail.danger_level === 0 ? 'Низкий' : detail.danger_level === 1 ? 'Умеренный' : detail.danger_level === 2 ? 'Высокий' : 'Критический'}
+                                </Badge>
+                              ) : '-'}
+                            </td>
+                            {idx === 0 && (
+                              <td className="p-3 border border-gray-200 text-right space-x-1" rowSpan={details.length}>
+                                <Button 
+                                  variant="outline" 
+                                  size="icon" 
+                                  onClick={() => student && handleEditClick(student)}
+                                  className="h-8 w-8"
+                                  title="Редактировать студента"
+                                >
+                                  <Pencil size={16} />
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="icon" 
+                                  onClick={() => student && handleDeleteClick(student)}
+                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Удалить студента"
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
+                              </td>
+                            )}
+                          </tr>
+                        ));
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
             ) : (
+              /* Простая таблица - показывается когда выбран конкретный предмет */
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
@@ -389,7 +561,9 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
                       </tr>
                   </thead>
                   <tbody>
-                    {students.map(student => (
+                    {students
+                      .filter(student => dangerFilter === null || student.danger_level === dangerFilter)
+                      .map(student => (
                       <tr key={student.id} className="hover:bg-gray-50">
                           <td className="p-3 border-b border-gray-200 font-mono text-sm">{student.id}</td>
                           <td className="p-3 border-b border-gray-200 font-medium">{student.name}</td>
@@ -419,7 +593,16 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
                               </Badge>
                             ) : '-'}
                           </td>
-                        <td className="p-3 border-b border-gray-200 text-right">
+                        <td className="p-3 border-b border-gray-200 text-right space-x-1">
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            onClick={() => handleEditClick(student)}
+                            className="h-8 w-8"
+                            title="Редактировать студента"
+                          >
+                            <Pencil size={16} />
+                          </Button>
                           <Button 
                             variant="outline" 
                             size="icon" 
@@ -436,77 +619,6 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
                 </table>
               </div>
             )}
-
-            {isAllSubjects && studentDetails.length > 0 && (
-              <div className="mt-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Детализация по предметам</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-200">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">Имя</th>
-                        <th className="p-3 border-b border-gray-200 font-semibold text-sm">Предмет</th>
-                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Средний %</th>
-                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Предикт %</th>
-                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Δ%</th>
-                        <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Риск</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        // Group details by student ID
-                        const groupedDetails: Record<number, Student[]> = {};
-                        studentDetails.forEach(detail => {
-                          if (!groupedDetails[detail.id]) {
-                            groupedDetails[detail.id] = [];
-                          }
-                          groupedDetails[detail.id].push(detail);
-                        });
-
-                        const studentIds = Object.keys(groupedDetails).map(Number);
-                        
-                        return studentIds.flatMap(studentId => {
-                          const details = groupedDetails[studentId];
-                          return details.map((detail, idx) => (
-                            <tr key={`${detail.id}-${detail.last_subject}-${idx}`} className="hover:bg-gray-50 text-sm">
-                              {idx === 0 && (
-                                <td 
-                                  className="p-3 border border-gray-200 font-medium bg-white" 
-                                  rowSpan={details.length}
-                                >
-                                  {detail.name}
-                                </td>
-                              )}
-                              <td className="p-3 border border-gray-200 text-gray-600">{detail.last_subject}</td>
-                              <td className="p-3 border border-gray-200 text-center">{detail.avg_percentage ?? '-'}</td>
-                              <td className="p-3 border border-gray-200 text-center">{detail.predicted_avg ?? '-'}</td>
-                              <td className="p-3 border border-gray-200 text-center">{detail.delta_percentage ?? '-'}</td>
-                              <td className="p-3 border border-gray-200 text-center">
-                                {typeof detail.danger_level === 'number' ? (
-                                  <Badge
-                                    variant="outline"
-                                    className={
-                                      detail.danger_level === 0 ? 'border-green-200 text-green-700' :
-                                      detail.danger_level === 1 ? 'border-yellow-200 text-yellow-700' :
-                                      detail.danger_level === 2 ? 'border-orange-200 text-orange-700' :
-                                      'border-red-200 text-red-700'
-                                    }
-                                  >
-                                    {detail.danger_level === 0 ? 'Низкий' : detail.danger_level === 1 ? 'Умеренный' : detail.danger_level === 2 ? 'Высокий' : 'Критический'}
-                                  </Badge>
-                                ) : '-'}
-                              </td>
-                            </tr>
-                          ));
-                        });
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) }
           </CardContent>
         </Card>
       )}
@@ -558,6 +670,77 @@ export default function StudentManagement({ grades, onRefreshGrades }: StudentMa
               disabled={!formData.name.trim()}
             >
               Добавить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Student Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Редактировать студента</DialogTitle>
+            <DialogDescription>
+              Редактирование данных студента "{currentStudent?.name}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-student-name">Имя студента *</Label>
+              <Input
+                id="edit-student-name"
+                name="name"
+                placeholder="Введите полное имя"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-student-email">Email (необязательно)</Label>
+              <Input
+                id="edit-student-email"
+                name="email"
+                type="email"
+                placeholder="student@example.com"
+                value={formData.email}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-student-phone">Телефон (необязательно)</Label>
+              <Input
+                id="edit-student-phone"
+                name="phone"
+                type="tel"
+                placeholder="+7 (XXX) XXX-XX-XX"
+                value={formData.phone}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-student-parent">Контакт родителя (необязательно)</Label>
+              <Input
+                id="edit-student-parent"
+                name="parent_contact"
+                placeholder="Телефон или email родителя"
+                value={formData.parent_contact}
+                onChange={handleInputChange}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsEditDialogOpen(false)}
+            >
+              Отмена
+            </Button>
+            <Button 
+              onClick={handleUpdateStudent}
+              disabled={!formData.name.trim()}
+            >
+              Сохранить
             </Button>
           </DialogFooter>
         </DialogContent>

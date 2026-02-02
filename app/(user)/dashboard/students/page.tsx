@@ -58,12 +58,21 @@ export default function StudentsPage() {
   const [selectedDangerLevel, setSelectedDangerLevel] = useState<string>('all');
   const [selectedParallel, setSelectedParallel] = useState<string>('all');
 
-  // Read danger level from URL parameters
+  // Read filters from URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const dangerParam = params.get('danger');
+    const parallelParam = params.get('parallel');
+    const gradeIdParam = params.get('gradeId');
+    
     if (dangerParam && ['0', '1', '2', '3'].includes(dangerParam)) {
       setSelectedDangerLevel(dangerParam);
+    }
+    if (parallelParam) {
+      setSelectedParallel(parallelParam);
+    }
+    if (gradeIdParam) {
+      setSelectedGrade(gradeIdParam);
     }
   }, []);
 

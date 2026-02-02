@@ -81,6 +81,25 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
     }
   };
 
+  // Navigate to /dashboard/students with filters
+  const navigateToStudentsWithFilter = (dangerLevel?: number, gradeId?: number) => {
+    const params = new URLSearchParams();
+    if (selectedParallel !== 'all') {
+      params.set('parallel', selectedParallel);
+    }
+    if (gradeId) {
+      params.set('gradeId', gradeId.toString());
+    } else if (selectedClassId !== 'all') {
+      params.set('gradeId', selectedClassId);
+    }
+    if (dangerLevel !== undefined) {
+      params.set('danger', dangerLevel.toString());
+    }
+    
+    const queryString = params.toString();
+    router.push(`/dashboard/students${queryString ? `?${queryString}` : ''}`);
+  };
+
   const fetchInsights = async () => {
     setLoading(true);
     try {
@@ -216,7 +235,10 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
           </CardContent>
         </Card>
 
-        <Card className={insights.summary.at_risk_count > 0 ? 'border-orange-200' : ''}>
+        <Card 
+          className={`${insights.summary.at_risk_count > 0 ? 'border-orange-200' : ''} cursor-pointer hover:shadow-md transition-shadow`}
+          onClick={() => navigateToStudentsWithFilter(2)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">В зоне риска</CardTitle>
             <AlertTriangle className="h-4 w-4 text-orange-500" />
@@ -226,10 +248,14 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
             <p className="text-xs text-muted-foreground">
               {insights.summary.at_risk_percentage}% от общего числа
             </p>
+            <p className="text-xs text-primary mt-1">Нажмите для просмотра →</p>
           </CardContent>
         </Card>
 
-        <Card className={insights.summary.critical_count > 0 ? 'border-red-200' : ''}>
+        <Card 
+          className={`${insights.summary.critical_count > 0 ? 'border-red-200' : ''} cursor-pointer hover:shadow-md transition-shadow`}
+          onClick={() => navigateToStudentsWithFilter(3)}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Критические случаи</CardTitle>
             <XCircle className="h-4 w-4 text-red-500" />
@@ -239,6 +265,7 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
             <p className="text-xs text-muted-foreground">
               требуют немедленного внимания
             </p>
+            <p className="text-xs text-primary mt-1">Нажмите для просмотра →</p>
           </CardContent>
         </Card>
 
@@ -346,7 +373,7 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
             <Button 
               variant="outline" 
               className="w-full mt-4"
-              onClick={() => router.push('/dashboard/students?danger=2')}
+              onClick={() => navigateToStudentsWithFilter(2)}
             >
               Показать всех студентов в зоне риска
             </Button>
@@ -370,7 +397,8 @@ export default function AnalyticsOverview({ grades, onTabChange }: AnalyticsOver
               {insights.problem_classes.map((cls) => (
                 <div 
                   key={cls.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
+                  className="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => navigateToStudentsWithFilter(2, cls.id)}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
