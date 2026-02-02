@@ -118,7 +118,7 @@ export default function AppSidebar({
                   const navItem = item as any;
                   const userType = userInfo?.type || 'user';
                   
-                  // For teachers, show only teacher-specific items and basic dashboard
+                  // For teachers, show only teacher-specific items and students
                   if (userType === 'teacher') {
                     // Show teacher-specific items
                     if (navItem.teacherOnly) {
@@ -132,16 +132,19 @@ export default function AppSidebar({
                     if (item.url === '/dashboard' ||
                         item.url === '/dashboard/classes' || 
                         item.url === '/dashboard/users' ||
-                        item.url === 'dashboard/users' ||
-                        item.url === '/dashboard/subjects') {
+                        item.url === 'dashboard/users') {
                       return false;
                     }
-                    // Allow students view
+                    // Allow students view and subjects view
                     return true;
                   }
                   
-                  // For admins, show everything
+                  // For admins, show admin items only (hide teacherOnly)
                   if (userType === 'admin') {
+                    // Hide teacher-specific items from admins
+                    if (navItem.teacherOnly) {
+                      return false;
+                    }
                     return true;
                   }
                   
