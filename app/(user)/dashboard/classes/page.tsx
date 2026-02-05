@@ -317,7 +317,7 @@ export default function ClassManagementPage() {
         await api.updateGrade(grade.id, {
           grade: newGradeName as any,
           parallel: newParallel,
-          student_count: grade.student_count
+          studentCount: grade.student_count
         });
       }
 
