@@ -638,6 +638,16 @@ export default function AnalyticsPage() {
     setModalOpen(true);
   };
 
+  const showGradeStudents = (gradeName: string) => {
+    const grade = data.grades.find(g => g.grade === gradeName);
+    if (!grade) return;
+    
+    const students = filteredStudents.filter(s => s.grade_id === grade.id);
+    setModalTitle(`Студенты ${gradeName} класса`);
+    setModalStudents(students);
+    setModalOpen(true);
+  };
+
   const handleStudentClick = (studentId: number) => {
     setModalOpen(false);
     router.push(`/dashboard/students?id=${studentId}`);
@@ -968,7 +978,7 @@ export default function AnalyticsPage() {
                 <CardHeader>
                   <CardTitle>Распределение рисков по параллелям</CardTitle>
                   <CardDescription>
-                    Количество студентов по уровням риска в каждой параллели
+                    Нажмите на столбец чтобы посмотреть студентов параллели
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -984,6 +994,16 @@ export default function AnalyticsPage() {
                         scales: {
                           x: { stacked: true },
                           y: { stacked: true, beginAtZero: true }
+                        },
+                        onClick: (event, elements) => {
+                          if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const parallelLabel = parallelComparisonData.labels[index];
+                            if (parallelLabel) {
+                              const parallel = (parallelLabel as string).replace(' класс', '');
+                              showParallelStudents(parallel);
+                            }
+                          }
                         }
                       }}
                     />
@@ -995,7 +1015,7 @@ export default function AnalyticsPage() {
                 <CardHeader>
                   <CardTitle>Процент студентов в зоне риска</CardTitle>
                   <CardDescription>
-                    Сравнение параллелей по проценту проблемных студентов
+                    Нажмите на столбец чтобы посмотреть студентов в риске
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -1013,6 +1033,16 @@ export default function AnalyticsPage() {
                             beginAtZero: true,
                             max: 100,
                             title: { display: true, text: '%' }
+                          }
+                        },
+                        onClick: (event, elements) => {
+                          if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const parallelLabel = riskPercentageData.labels[index];
+                            if (parallelLabel) {
+                              const parallel = (parallelLabel as string).replace(' класс', '');
+                              showParallelAtRisk(parallel);
+                            }
                           }
                         }
                       }}
@@ -1202,7 +1232,7 @@ export default function AnalyticsPage() {
               <CardHeader>
                 <CardTitle>Сравнение по классам</CardTitle>
                 <CardDescription>
-                  Количество студентов и студентов в зоне риска по классам
+                  Нажмите на столбец чтобы посмотреть студентов класса
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1217,6 +1247,15 @@ export default function AnalyticsPage() {
                       },
                       scales: {
                         y: { beginAtZero: true }
+                      },
+                      onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                          const index = elements[0].index;
+                          const gradeName = gradeComparisonData.labels[index];
+                          if (gradeName) {
+                            showGradeStudents(gradeName as string);
+                          }
+                        }
                       }
                     }}
                   />
@@ -1416,8 +1455,8 @@ export default function AnalyticsPage() {
         students={modalStudents}
         grades={data.grades}
         onStudentClick={(studentId) => {
-          console.log('Student clicked:', studentId);
-          // TODO: Navigate to student details or show more info
+          setModalOpen(false);
+          router.push(`/dashboard/students/${studentId}`);
         }}
       />
     </PageContainer>

@@ -24,11 +24,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Pencil, Trash2, Plus, Users, BarChart3, GraduationCap, Upload, Eye } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Pencil, Trash2, Plus, Users, GraduationCap, Upload, Eye, CalendarPlus, AlertTriangle } from 'lucide-react';
 import api, { Grade as ApiGrade } from '@/lib/api';
 import { ApiError } from '@/utils/errorHandler';
 import StudentManagement from './_components/student-management';
-import AnalyticsOverview from './_components/analytics-overview';
 import { UploadScores } from './_components/upload-scores';
 import { useAvailableClasses } from '@/hooks/use-system-settings';
 
@@ -71,6 +71,10 @@ export default function ClassManagementPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [currentGrade, setCurrentGrade] = useState<LocalGrade | null>(null);
+  const [selectedGradeIds, setSelectedGradeIds] = useState<number[]>([]);
+  const [isMultiDeleteDialogOpen, setIsMultiDeleteDialogOpen] = useState(false);
+  const [isNewYearDialogOpen, setIsNewYearDialogOpen] = useState(false);
+  const [newYearProcessing, setNewYearProcessing] = useState(false);
   const [formData, setFormData] = useState<CreateGradePayload>({
     grade: '',
     parallel: '',
@@ -240,6 +244,94 @@ export default function ClassManagementPage() {
     }
   };
 
+  const handleSelectGrade = (gradeId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedGradeIds(prev => [...prev, gradeId]);
+    } else {
+      setSelectedGradeIds(prev => prev.filter(id => id !== gradeId));
+    }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedGradeIds(grades.map(g => g.id));
+    } else {
+      setSelectedGradeIds([]);
+    }
+  };
+
+  const handleMultiDelete = async () => {
+    try {
+      for (const gradeId of selectedGradeIds) {
+        await api.deleteGrade(gradeId);
+      }
+      toast.success(`Удалено ${selectedGradeIds.length} классов`);
+      setIsMultiDeleteDialogOpen(false);
+      setSelectedGradeIds([]);
+      fetchGrades();
+    } catch (err) {
+      const apiError = err as ApiError;
+      toast.error(`Ошибка удаления классов: ${apiError.message}`);
+    }
+  };
+
+  const handleNewAcademicYear = async () => {
+    setNewYearProcessing(true);
+    try {
+      // 1. Update all classes: increment parallel number (e.g., 10 -> 11)
+      // 2. Delete graduating classes (e.g., 12th grade)
+      // 3. Clear all scores
+      
+      const graduatingGrades = grades.filter(g => {
+        const parallel = parseInt(g.parallel);
+        return parallel >= 12; // 12 класс выпускается
+      });
+      
+      const promotingGrades = grades.filter(g => {
+        const parallel = parseInt(g.parallel);
+        return parallel < 12;
+      });
+
+      // Delete graduating classes
+      for (const grade of graduatingGrades) {
+        await api.deleteGrade(grade.id);
+      }
+
+      // Update remaining classes to next year
+      for (const grade of promotingGrades) {
+        const currentParallel = parseInt(grade.parallel);
+        const newParallel = (currentParallel + 1).toString();
+        
+        // Replace the parallel number in class name (e.g., "8 C" -> "9 C", "10 А" -> "11 А")
+        // Handle both cases: "8 C" and "8C"
+        let newGradeName = grade.grade;
+        const numberMatch = grade.grade.match(/^(\d+)\s*(.*)$/);
+        if (numberMatch) {
+          const letter = numberMatch[2]; // "C" or "А" etc.
+          newGradeName = `${newParallel} ${letter}`.trim();
+        } else {
+          // Fallback: just prepend new parallel
+          newGradeName = `${newParallel} ${grade.grade.replace(/\d+/g, '')}`.trim();
+        }
+        
+        await api.updateGrade(grade.id, {
+          grade: newGradeName as any,
+          parallel: newParallel,
+          student_count: grade.student_count
+        });
+      }
+
+      toast.success('Учебный год успешно обновлен! Выпускные классы удалены, остальные переведены.');
+      setIsNewYearDialogOpen(false);
+      fetchGrades();
+    } catch (err) {
+      const apiError = err as ApiError;
+      toast.error(`Ошибка обновления учебного года: ${apiError.message}`);
+    } finally {
+      setNewYearProcessing(false);
+    }
+  };
+
   const openCreateDialog = () => {
     resetForm();
     setIsCreateDialogOpen(true);
@@ -258,7 +350,7 @@ export default function ClassManagementPage() {
   const searchParams = useSearchParams();
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['classes', 'students', 'analytics'].includes(tab)) {
+    if (tab && ['classes', 'students'].includes(tab)) {
       setCurrentTab(tab);
     }
     
@@ -322,7 +414,7 @@ export default function ClassManagementPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="classes" className="flex items-center gap-2">
               <GraduationCap size={16} />
               Классы
@@ -331,16 +423,28 @@ export default function ClassManagementPage() {
               <Users size={16} />
               Студенты
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2">
-              <BarChart3 size={16} />
-              Аналитика
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="classes" className="space-y-6">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">Управление классами</h2>
               <div className="flex items-center gap-2">
+                {selectedGradeIds.length > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => setIsMultiDeleteDialogOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 size={16} /> Удалить выбранные ({selectedGradeIds.length})
+                  </Button>
+                )}
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsNewYearDialogOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <CalendarPlus size={16} /> Новый учебный год
+                </Button>
                 <UploadScores
                   onUploadComplete={fetchGrades}
                   trigger={
@@ -386,6 +490,12 @@ export default function ClassManagementPage() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr className="bg-gray-100 text-left">
+                          <th className="p-3 border-b border-gray-200 font-semibold w-10">
+                            <Checkbox
+                              checked={selectedGradeIds.length === grades.length && grades.length > 0}
+                              onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                            />
+                          </th>
                           <th className="p-3 border-b border-gray-200 font-semibold">Класс</th>
                           <th className="p-3 border-b border-gray-200 font-semibold">Параллель</th>
                           <th className="p-3 border-b border-gray-200 font-semibold">Куратор</th>
@@ -396,6 +506,12 @@ export default function ClassManagementPage() {
                       <tbody>
                         {grades.map(grade => (
                           <tr key={grade.id} className="hover:bg-gray-50">
+                            <td className="p-3 border-b border-gray-200">
+                              <Checkbox
+                                checked={selectedGradeIds.includes(grade.id)}
+                                onCheckedChange={(checked) => handleSelectGrade(grade.id, !!checked)}
+                              />
+                            </td>
                             <td className="p-3 border-b border-gray-200 font-medium">{grade.grade}</td>
                             <td className="p-3 border-b border-gray-200">{grade.parallel}</td>
                             <td className="p-3 border-b border-gray-200">
@@ -471,21 +587,6 @@ export default function ClassManagementPage() {
               }))}
               onRefreshGrades={fetchGrades}
               initialFilters={studentFilters}
-            />
-          </TabsContent>
-
-          <TabsContent value="analytics">
-            <AnalyticsOverview
-              grades={grades.map(g => ({
-                id: g.id,
-                grade: g.grade,
-                parallel: g.parallel,
-                curatorName: g.curator_info?.name || g.curator_name || 'Не назначен',
-                shanyrak: g.curator_info?.shanyrak || '',
-                studentCount: g.student_count,
-                actualStudentCount: g.actual_student_count
-              }))}
-              onTabChange={handleTabChange}
             />
           </TabsContent>
         </Tabs>
@@ -704,6 +805,93 @@ export default function ClassManagementPage() {
                 onClick={handleDeleteGrade}
               >
                 Удалить
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Multi Delete Confirmation Dialog */}
+        <Dialog open={isMultiDeleteDialogOpen} onOpenChange={setIsMultiDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                Удалить выбранные классы
+              </DialogTitle>
+              <DialogDescription>
+                Вы уверены, что хотите удалить {selectedGradeIds.length} выбранных классов? 
+                Все данные студентов и оценок будут удалены. Это действие нельзя отменить.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsMultiDeleteDialogOpen(false)}
+              >
+                Отмена
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleMultiDelete}
+              >
+                Удалить {selectedGradeIds.length} классов
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* New Academic Year Dialog */}
+        <Dialog open={isNewYearDialogOpen} onOpenChange={setIsNewYearDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CalendarPlus className="h-5 w-5 text-primary" />
+                Начать новый учебный год
+              </DialogTitle>
+              <DialogDescription>
+                Эта операция выполнит следующие действия:
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border border-red-200">
+                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-red-800">Удаление выпускных классов</p>
+                    <p className="text-sm text-red-600">
+                      Все классы 12 параллели будут удалены вместе с данными студентов
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <GraduationCap className="h-5 w-5 text-blue-500 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-blue-800">Перевод классов</p>
+                    <p className="text-sm text-blue-600">
+                      Все остальные классы будут переведены на следующую параллель (10→11, 11→12)
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-sm text-yellow-800">
+                  <strong>Внимание:</strong> Это действие необратимо. Рекомендуем сделать резервную копию данных перед продолжением.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsNewYearDialogOpen(false)}
+                disabled={newYearProcessing}
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={handleNewAcademicYear}
+                disabled={newYearProcessing}
+              >
+                {newYearProcessing ? 'Обработка...' : 'Начать новый год'}
               </Button>
             </DialogFooter>
           </DialogContent>
