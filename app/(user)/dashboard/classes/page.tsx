@@ -100,6 +100,15 @@ export default function ClassManagementPage() {
     return Array.from(lettersSet);
   }, [availableClasses, selectedParallel]);
 
+  const sortedGrades = useMemo(() => {
+    return [...grades].sort((a, b) => {
+      const parallelA = parseInt(a.parallel) || 0;
+      const parallelB = parseInt(b.parallel) || 0;
+      if (parallelA !== parallelB) return parallelA - parallelB;
+      return a.grade.localeCompare(b.grade);
+    });
+  }, [grades]);
+
   // Check user authentication and authorization
   useEffect(() => {
     const loadUser = async () => {
@@ -504,7 +513,7 @@ export default function ClassManagementPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {grades.map(grade => (
+                        {sortedGrades.map(grade => (
                           <tr key={grade.id} className="hover:bg-gray-50">
                             <td className="p-3 border-b border-gray-200">
                               <Checkbox
@@ -668,7 +677,7 @@ export default function ClassManagementPage() {
                   <SelectTrigger id="curator">
                     <SelectValue placeholder="Выберите куратора" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="none">Без куратора</SelectItem>
                     {curators.map((curator) => (
                       <SelectItem key={curator.id} value={curator.id.toString()}>
@@ -750,7 +759,7 @@ export default function ClassManagementPage() {
                   <SelectTrigger id="edit-curator">
                     <SelectValue placeholder="Выберите куратора" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="none">Без куратора</SelectItem>
                     {curators.map((curator) => (
                       <SelectItem key={curator.id} value={curator.id.toString()}>
