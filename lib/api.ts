@@ -400,6 +400,31 @@ class ApiService {
     }
   }
 
+  async bulkUploadTeachers(file: File): Promise<{
+    success: boolean;
+    total_processed: number;
+    created_count: number;
+    error_count: number;
+    errors: Array<{ row: number; error: string; data: any }>;
+    created_users: Array<{ id: number; name: string; email: string; position?: string; subject?: string }>;
+  }> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await apiClient.post('/users/bulk-upload-teachers', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+
   // ==================== DASHBOARD ====================
 
   async getDangerLevels(): Promise<DashboardResponse> {

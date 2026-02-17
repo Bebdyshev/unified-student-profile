@@ -52,6 +52,17 @@ export function UserManagement() {
     type: 'curator',
     shanyrak: ''
   });
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadResults, setUploadResults] = useState<{
+    success: boolean;
+    total_processed: number;
+    created_count: number;
+    error_count: number;
+    errors: Array<{ row: number; error: string; data: any }>;
+    created_users: Array<{ id: number; name: string; email: string; position?: string; subject?: string }>;
+  } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -72,6 +83,33 @@ export function UserManagement() {
       toast.error('Не удалось загрузить пользователей');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBulkUpload = async () => {
+    if (!uploadFile) {
+      toast.error('Выберите файл для загрузки');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const results = await api.bulkUploadTeachers(uploadFile);
+      setUploadResults(results);
+      
+      if (results.created_count > 0) {
+        toast.success(`Успешно создано ${results.created_count} учителей`);
+        await fetchUsers();
+      }
+      
+      if (results.error_count > 0) {
+        toast.warning(`${results.error_count} ошибок при импорте`);
+      }
+    } catch (error: any) {
+      console.error('Failed to upload teachers:', error);
+      toast.error(error.message || 'Ошибка при загрузке файла');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -311,20 +349,173 @@ export function UserManagement() {
           </p>
         </div>
         
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Добавить пользователя
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Создать пользователя</DialogTitle>
-              <DialogDescription>
-                Добавить нового куратора или учителя в систему
-              </DialogDescription>
-            </DialogHeader>
+        <div className="flex gap-2">
+          <Dialog open={isUploadDialogOpen} onOpenChange={(open) => {
+            setIsUploadDialogOpen(open);
+            if (!open) {
+              setUploadFile(null);
+              setUploadResults(null);
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Загрузить Excel
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Массовая загрузка учителей</DialogTitle>
+                <DialogDescription>
+                  Загрузите Excel файл с данными учителей (ФИО, Должность, Email)
+                </DialogDescription>
+              </DialogHeader>
+              
+              {!uploadResults ? (
+                <div className="space-y-4">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      id="excel-upload"
+                    />
+                    <label htmlFor="excel-upload" className="cursor-pointer">
+                      <div className="flex flex-col items-center gap-2">
+                        <Plus className="h-12 w-12 text-gray-400" />
+                        <p className="text-sm font-medium">
+                          {uploadFile ? uploadFile.name : 'Выберите Excel файл'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Форматы: .xlsx, .xls
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium mb-2">Формат файла:</h4>
+                    <ul className="text-xs text-muted-foreground space-y-1">
+                      <li>• Столбец 1: № (необязательно)</li>
+                      <li>• Столбец 2: ФИО (Фамилия Имя Отчество)</li>
+                      <li>• Столбец 3: Должность (любой текст)</li>
+                      <li>• Столбец 4: Email (обязательно)</li>
+                    </ul>
+                    <p className="text-xs text-orange-600 mt-2">
+                      ⚠️ Пароль по умолчанию для всех учителей: <strong>123</strong>
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsUploadDialogOpen(false)}
+                    >
+                      Отмена
+                    </Button>
+                    <Button
+                      onClick={handleBulkUpload}
+                      disabled={!uploadFile || isUploading}
+                    >
+                      {isUploading ? 'Загрузка...' : 'Загрузить'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-green-600">{uploadResults.created_count}</p>
+                          <p className="text-sm text-muted-foreground">Создано</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-red-600">{uploadResults.error_count}</p>
+                          <p className="text-sm text-muted-foreground">Ошибок</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold">{uploadResults.total_processed}</p>
+                          <p className="text-sm text-muted-foreground">Обработано</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {uploadResults.created_users.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">Созданные учителя:</h4>
+                      <ScrollArea className="h-32 border rounded-md p-2">
+                        <div className="space-y-1">
+                          {uploadResults.created_users.map((user) => (
+                            <div key={user.id} className="text-sm p-2 bg-green-50 rounded">
+                              <div className="font-medium">{user.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {user.email}
+                                {user.subject && (
+                                  <span className="ml-2 text-blue-600">• {user.subject}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+
+                  {uploadResults.errors.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2 text-red-600">Ошибки:</h4>
+                      <ScrollArea className="h-32 border rounded-md p-2">
+                        <div className="space-y-1">
+                          {uploadResults.errors.map((error, idx) => (
+                            <div key={idx} className="text-sm p-2 bg-red-50 rounded">
+                              <span className="font-medium">Строка {error.row}:</span> {error.error}
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end">
+                    <Button onClick={() => {
+                      setIsUploadDialogOpen(false);
+                      setUploadFile(null);
+                      setUploadResults(null);
+                    }}>
+                      Закрыть
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Добавить пользователя
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Создать пользователя</DialogTitle>
+                <DialogDescription>
+                  Добавить нового куратора или учителя в систему
+                </DialogDescription>
+              </DialogHeader>
+
             
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -413,6 +604,8 @@ export function UserManagement() {
             </div>
           </DialogContent>
         </Dialog>
+      </div>
+
       </div>
 
       {/* Tabs + Search */}
