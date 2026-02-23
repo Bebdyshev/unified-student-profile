@@ -220,7 +220,7 @@ export default function AnalyticsPage() {
         try {
           const userData = await api.getCurrentUser();
           setUser(userData);
-          if (userData.type !== 'admin') {
+          if (userData.type !== 'admin' && userData.type !== 'curator') {
             toast.error('Доступ запрещен');
             router.push('/teacher/dashboard');
           }
@@ -235,7 +235,7 @@ export default function AnalyticsPage() {
   }, [isAuthenticated, authLoading, router]);
 
   useEffect(() => {
-    if (user && user.type === 'admin') {
+    if (user && (user.type === 'admin' || user.type === 'curator')) {
       fetchData(selectedSubject);
     }
   }, [user, selectedSubject]);
