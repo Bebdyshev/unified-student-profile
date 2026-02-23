@@ -43,6 +43,7 @@ export function UserManagement() {
   const [allGrades, setAllGrades] = useState<{ id: number; grade: string }[]>([]);
   const [teacherCurrentAssignments, setTeacherCurrentAssignments] = useState<any[]>([]);
   const [selectedAssignments, setSelectedAssignments] = useState<{ subjectId: number; gradeId: number }[]>([]);
+  const [assignSubjectFilter, setAssignSubjectFilter] = useState<number | null>(null);
   const [formData, setFormData] = useState<CreateUserData>({
     name: '',
     first_name: '',
@@ -127,6 +128,20 @@ export function UserManagement() {
     });
   }, [users, searchQuery]);
 
+  const sortedGrades = useMemo(() => {
+    return [...allGrades].sort((a, b) => {
+      const parseGrade = (g: string) => {
+        const match = g.match(/^(\d+)\s*(.*)$/);
+        if (!match) return { num: 999, letter: g };
+        return { num: parseInt(match[1], 10), letter: match[2].trim() };
+      };
+      const ga = parseGrade(a.grade);
+      const gb = parseGrade(b.grade);
+      if (ga.num !== gb.num) return ga.num - gb.num;
+      return ga.letter.localeCompare(gb.letter);
+    });
+  }, [allGrades]);
+
   useEffect(() => {
     if (selectedUserType === 'teacher' && users.length) {
       hydrateTeacherAssignments();
@@ -208,6 +223,7 @@ export function UserManagement() {
         .filter(a => a.is_active === 1 && a.grade_id)
         .map(a => ({ subjectId: a.subject_id, gradeId: a.grade_id }));
       setSelectedAssignments(currentAssigns);
+      setAssignSubjectFilter(subjects.length > 0 ? (subjects as Subject[])[0].id : null);
     } catch (e) {
       toast.error('Не удалось загрузить данные');
       return;
@@ -922,49 +938,70 @@ export function UserManagement() {
           <DialogHeader>
             <DialogTitle>Назначить классы учителю</DialogTitle>
             <DialogDescription>
-              {currentUser?.name} - выберите предметы и классы для преподавания
+              {currentUser?.name} - выберите предмет и классы для преподавания
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <ScrollArea className="h-[400px] pr-4">
-              {allSubjects.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">Нет доступных предметов</p>
-              ) : (
-                <div className="space-y-6">
-                  {allSubjects.map(subject => (
-                    <div key={subject.id} className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-primary" />
-                        <h4 className="font-medium">{subject.name}</h4>
-                      </div>
-                      <div className="grid grid-cols-4 gap-2 pl-6">
-                        {allGrades.map(grade => {
-                          const isSelected = selectedAssignments.some(
-                            a => a.subjectId === subject.id && a.gradeId === grade.id
-                          );
-                          return (
-                            <label
-                              key={`${subject.id}-${grade.id}`}
-                              className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
-                                isSelected 
-                                  ? 'bg-primary/10 border-primary' 
-                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                              }`}
-                            >
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleAssignment(subject.id, grade.id)}
-                              />
-                              <span className="text-sm">{grade.grade}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+            {allSubjects.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">Нет доступных предметов</p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Предмет</Label>
+                  <Select
+                    value={assignSubjectFilter?.toString() ?? ''}
+                    onValueChange={(val) => setAssignSubjectFilter(Number(val))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите предмет" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allSubjects.map(subject => (
+                        <SelectItem key={subject.id} value={subject.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            <BookOpen className="h-4 w-4" />
+                            <span>{subject.name}</span>
+                            {selectedAssignments.some(a => a.subjectId === subject.id) && (
+                              <Badge variant="secondary" className="ml-1 text-xs">
+                                {selectedAssignments.filter(a => a.subjectId === subject.id).length}
+                              </Badge>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </ScrollArea>
+
+                {assignSubjectFilter && (
+                  <ScrollArea className="h-[350px] pr-4">
+                    <div className="grid grid-cols-4 gap-2">
+                      {sortedGrades.map(grade => {
+                        const isSelected = selectedAssignments.some(
+                          a => a.subjectId === assignSubjectFilter && a.gradeId === grade.id
+                        );
+                        return (
+                          <label
+                            key={grade.id}
+                            className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                              isSelected 
+                                ? 'bg-primary/10 border-primary' 
+                                : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleAssignment(assignSubjectFilter, grade.id)}
+                            />
+                            <span className="text-sm">{grade.grade}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+              </>
+            )}
             <Separator />
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">

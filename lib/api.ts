@@ -557,9 +557,13 @@ class ApiService {
     }
   }
 
-  async getAllClassData(): Promise<any> {
+  async getAllClassData(subject?: string): Promise<any> {
     try {
-      const response: AxiosResponse<any> = await apiClient.get('/grades/get_class');
+      const params: Record<string, string> = {};
+      if (subject && subject !== 'all') {
+        params.subject = subject;
+      }
+      const response: AxiosResponse<any> = await apiClient.get('/grades/get_class', { params });
       return response.data;
     } catch (error) {
       throw handleApiError(error);

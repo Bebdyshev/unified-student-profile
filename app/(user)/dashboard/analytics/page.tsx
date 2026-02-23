@@ -236,21 +236,20 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (user && user.type === 'admin') {
-      fetchData();
+      fetchData(selectedSubject);
     }
-  }, [user]);
+  }, [user, selectedSubject]);
 
-  const fetchData = async () => {
+  const fetchData = async (subject?: string) => {
     setLoading(true);
     try {
       const [gradesRes, subjectsRes, parallelsRes, classDataRes] = await Promise.all([
         api.getAllGrades(),
         api.getSubjects(),
         api.getParallels(),
-        api.getAllClassData()
+        api.getAllClassData(subject)
       ]);
 
-      // Extract students from class data
       const allStudents: Student[] = [];
       if (classDataRes?.class_data) {
         classDataRes.class_data.forEach((classItem: any) => {
@@ -708,7 +707,7 @@ export default function AnalyticsPage() {
             <p className="text-gray-500">Анализ успеваемости и рисков студентов</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={fetchData}>
+            <Button variant="outline" onClick={() => fetchData(selectedSubject)}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Обновить
             </Button>
