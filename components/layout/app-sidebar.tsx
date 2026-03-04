@@ -133,10 +133,11 @@ export default function AppSidebar({
                     if (item.url === '/dashboard' ||
                         item.url === '/dashboard/classes' || 
                         item.url === '/dashboard/users' ||
-                        item.url === 'dashboard/users') {
+                        item.url === 'dashboard/users' ||
+                        item.url === '/dashboard/subjects') {
                       return false;
                     }
-                    // Allow students view and subjects view
+                    // Allow teacher pages, students and analytics
                     return true;
                   }
                   
