@@ -497,14 +497,14 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
                 <div className="space-y-2">
                   <Label htmlFor="subgroup-select">Подгруппа (опционально)</Label>
                   <Select
-                    value={formData.subgroup_id?.toString() || ''}
-                    onValueChange={(value) => handleInputChange('subgroup_id', value ? parseInt(value) : undefined)}
+                    value={formData.subgroup_id?.toString() || '__none__'}
+                    onValueChange={(value) => handleInputChange('subgroup_id', value !== '__none__' ? parseInt(value) : undefined)}
                   >
                     <SelectTrigger id="subgroup-select">
                       <SelectValue placeholder="Выберите подгруппу или оставьте пустым" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Без подгруппы</SelectItem>
+                      <SelectItem value="__none__">Без подгруппы</SelectItem>
                       {subgroups.map((subgroup) => (
                         <SelectItem key={subgroup.id} value={subgroup.id.toString()}>
                           {subgroup.name}
@@ -520,14 +520,14 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
                 <div className="space-y-2">
                   <Label htmlFor="subject-group-select">Предметная группа (11–12 класс)</Label>
                   <Select
-                    value={formData.subject_group_id?.toString() || ''}
-                    onValueChange={(value) => handleInputChange('subject_group_id', value ? parseInt(value) : undefined)}
+                    value={formData.subject_group_id?.toString() || '__none__'}
+                    onValueChange={(value) => handleInputChange('subject_group_id', value !== '__none__' ? parseInt(value) : undefined)}
                   >
                     <SelectTrigger id="subject-group-select">
                       <SelectValue placeholder="Выберите группу или оставьте пустым" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Без группы</SelectItem>
+                      <SelectItem value="__none__">Без группы</SelectItem>
                       {subjectGroups
                         .filter((g) => !formData.subject_id || g.subject_id === formData.subject_id)
                         .map((g) => (
