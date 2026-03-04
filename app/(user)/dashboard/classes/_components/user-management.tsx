@@ -59,9 +59,11 @@ export function UserManagement() {
     success: boolean;
     total_processed: number;
     created_count: number;
+    updated_count?: number;
     error_count: number;
     errors: Array<{ row: number; error: string; data: any }>;
     created_users: Array<{ id: number; name: string; email: string; position?: string; subject?: string }>;
+    row_results?: Array<{ row: number; status: string; message: string; teacher_name?: string; class_name?: string; subject_name?: string; subject_group_name?: string }>;
   } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -156,7 +158,11 @@ export function UserManagement() {
         if (!a.teacher_id) continue;
         if (!map[a.teacher_id]) map[a.teacher_id] = { subjects: new Set(), classes: new Set() };
         if (a.subject_name) map[a.teacher_id].subjects.add(a.subject_name);
-        const cls = a.subgroup_name ? `${a.grade_name || ''} (${a.subgroup_name})`.trim() : (a.grade_name || '');
+        const cls = a.subject_group_name
+          ? `${a.grade_name || ''} (${a.subject_group_name})`.trim()
+          : a.subgroup_name
+            ? `${a.grade_name || ''} (${a.subgroup_name})`.trim()
+            : (a.grade_name || '');
         if (cls) map[a.teacher_id].classes.add(cls);
       }
       const compact: Record<number, { subjects: string[]; classes: string[] }> = {};
@@ -383,7 +389,7 @@ export function UserManagement() {
               <DialogHeader>
                 <DialogTitle>Массовая загрузка учителей</DialogTitle>
                 <DialogDescription>
-                  Загрузите Excel файл с данными учителей (ФИО, Должность, Email)
+                  Загрузите Excel файл с данными учителей, классов и назначений
                 </DialogDescription>
               </DialogHeader>
               
@@ -411,15 +417,18 @@ export function UserManagement() {
                   </div>
                   
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="text-sm font-medium mb-2">Формат файла:</h4>
+                    <h4 className="text-sm font-medium mb-2">Формат файла (XLSX):</h4>
                     <ul className="text-xs text-muted-foreground space-y-1">
                       <li>• Столбец 1: № (необязательно)</li>
-                      <li>• Столбец 2: ФИО (Фамилия Имя Отчество)</li>
-                      <li>• Столбец 3: Должность (любой текст)</li>
+                      <li>• Столбец 2: ФИО (обязательно)</li>
+                      <li>• Столбец 3: Должность</li>
                       <li>• Столбец 4: Email (обязательно)</li>
+                      <li>• Столбец 5: Класс (например 11A, 10B)</li>
+                      <li>• Столбец 6: Предмет (физика, химия, информатика и т.д.)</li>
+                      <li>• Столбец 7: Предметная группа (только для 11–12 классов)</li>
                     </ul>
                     <p className="text-xs text-orange-600 mt-2">
-                      ⚠️ Пароль по умолчанию для всех учителей: <strong>123</strong>
+                      ⚠️ Пароль по умолчанию для новых учителей: <strong>123</strong>. Отсутствующие классы создаются автоматически.
                     </p>
                   </div>
                   
@@ -440,12 +449,20 @@ export function UserManagement() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-4 gap-4">
                     <Card>
                       <CardContent className="pt-6">
                         <div className="text-center">
                           <p className="text-2xl font-bold text-green-600">{uploadResults.created_count}</p>
                           <p className="text-sm text-muted-foreground">Создано</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-blue-600">{uploadResults.updated_count ?? 0}</p>
+                          <p className="text-sm text-muted-foreground">Обновлено</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -466,6 +483,29 @@ export function UserManagement() {
                       </CardContent>
                     </Card>
                   </div>
+
+                  {uploadResults.row_results && uploadResults.row_results.length > 0 && (
+                    <div>
+                      <h4 className="font-medium mb-2">Результаты по строкам:</h4>
+                      <ScrollArea className="h-40 border rounded-md p-2">
+                        <div className="space-y-1">
+                          {uploadResults.row_results.map((r, idx) => (
+                            <div
+                              key={idx}
+                              className={`text-sm p-2 rounded flex items-center justify-between gap-2 ${
+                                r.status === 'created' ? 'bg-green-50' : r.status === 'updated' ? 'bg-blue-50' : 'bg-red-50'
+                              }`}
+                            >
+                              <span className="font-medium shrink-0">Строка {r.row}:</span>
+                              <span className="truncate">{r.teacher_name || r.message}</span>
+                              {r.class_name && <Badge variant="secondary" className="shrink-0">{r.class_name}</Badge>}
+                              {r.subject_name && <span className="text-muted-foreground shrink-0">{r.subject_name}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
 
                   {uploadResults.created_users.length > 0 && (
                     <div>

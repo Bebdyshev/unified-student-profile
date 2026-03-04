@@ -25,11 +25,12 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Plus, Users, GraduationCap, Upload, Eye, CalendarPlus, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, Plus, Users, GraduationCap, Upload, Eye, CalendarPlus, AlertTriangle, Layers } from 'lucide-react';
 import api, { Grade as ApiGrade } from '@/lib/api';
 import { ApiError } from '@/utils/errorHandler';
 import StudentManagement from './_components/student-management';
 import { UploadScores } from './_components/upload-scores';
+import { SubjectGroupsManager } from './_components/subject-groups-manager';
 import { useAvailableClasses } from '@/hooks/use-system-settings';
 
 interface LocalGrade {
@@ -359,7 +360,7 @@ export default function ClassManagementPage() {
   const searchParams = useSearchParams();
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['classes', 'students'].includes(tab)) {
+    if (tab && ['classes', 'students', 'groups'].includes(tab)) {
       setCurrentTab(tab);
     }
     
@@ -423,7 +424,7 @@ export default function ClassManagementPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="classes" className="flex items-center gap-2">
               <GraduationCap size={16} />
               Классы
@@ -431,6 +432,10 @@ export default function ClassManagementPage() {
             <TabsTrigger value="students" className="flex items-center gap-2">
               <Users size={16} />
               Студенты
+            </TabsTrigger>
+            <TabsTrigger value="groups" className="flex items-center gap-2">
+              <Layers size={16} />
+              Предметные группы
             </TabsTrigger>
           </TabsList>
 
@@ -597,6 +602,9 @@ export default function ClassManagementPage() {
               onRefreshGrades={fetchGrades}
               initialFilters={studentFilters}
             />
+          </TabsContent>
+          <TabsContent value="groups">
+            <SubjectGroupsManager />
           </TabsContent>
         </Tabs>
 

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
-import AppSidebar from '@/components/layout/app-sidebar';
 
 export default function TeacherLayout({
   children,
@@ -58,8 +57,6 @@ export default function TeacherLayout({
   }
 
   return (
-    <div className="h-screen bg-white-950">
-      <AppSidebar>{children}</AppSidebar>
-    </div>
+    <>{children}</>
   );
 }

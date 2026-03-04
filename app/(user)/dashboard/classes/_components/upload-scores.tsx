@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Upload, Download, FileText, AlertCircle, CheckCircle, Info, X } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
-import type { Grade, Subject, Subgroup, ExcelUploadResponse } from '@/types';
+import type { Grade, Subject, Subgroup, SubjectGroup, ExcelUploadResponse } from '@/types';
 
 interface UploadScoresProps {
   onUploadComplete?: () => void;
@@ -27,6 +27,7 @@ interface UploadFormData {
   teacher_name: string;
   semester: number;
   subgroup_id?: number;
+  subject_group_id?: number;
   file: File | null;
 }
 
@@ -58,6 +59,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
     teacher_name: '',
     semester: 1,
     subgroup_id: undefined,
+    subject_group_id: undefined,
     file: null
   });
 
@@ -65,6 +67,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subgroups, setSubgroups] = useState<Subgroup[]>([]);
+  const [subjectGroups, setSubjectGroups] = useState<SubjectGroup[]>([]);
   const [teacherNames, setTeacherNames] = useState<string[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [teacherAssignments, setTeacherAssignments] = useState<any[]>([]);
@@ -113,11 +116,23 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   useEffect(() => {
     if (formData.grade_id > 0) {
       loadSubgroups(formData.grade_id);
+      loadSubjectGroups(formData.grade_id);
     } else {
       setSubgroups([]);
-      setFormData(prev => ({ ...prev, subgroup_id: undefined }));
+      setSubjectGroups([]);
+      setFormData(prev => ({ ...prev, subgroup_id: undefined, subject_group_id: undefined }));
     }
   }, [formData.grade_id]);
+
+  // Clear subject_group_id when subject changes (group might not match new subject)
+  useEffect(() => {
+    if (formData.subject_group_id && formData.subject_id) {
+      const group = subjectGroups.find((g) => g.id === formData.subject_group_id)
+      if (group && group.subject_id !== formData.subject_id) {
+        setFormData((prev) => ({ ...prev, subject_group_id: undefined }))
+      }
+    }
+  }, [formData.subject_id, formData.subject_group_id, subjectGroups])
 
   // Load teachers when subject (or grade) changes
   useEffect(() => {
@@ -195,6 +210,16 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
     }
   };
 
+  const loadSubjectGroups = async (gradeId: number) => {
+    try {
+      const groups = await api.getSubjectGroupsByGrade(gradeId);
+      setSubjectGroups(groups);
+      setFormData(prev => ({ ...prev, subject_group_id: undefined }));
+    } catch {
+      setSubjectGroups([]);
+    }
+  };
+
   const handleInputChange = (field: keyof UploadFormData, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -253,6 +278,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
         teacher_name: formData.teacher_name,
         semester: formData.semester,
         subgroup_id: formData.subgroup_id,
+        subject_group_id: formData.subject_group_id,
         file: formData.file!
       });
 
@@ -311,6 +337,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
       teacher_name: '',
       semester: 1,
       subgroup_id: undefined,
+      subject_group_id: undefined,
       file: null
     });
     setUploadResult(null);
@@ -483,6 +510,31 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
                           {subgroup.name}
                         </SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Subject Group Selection (11-12 grades only) */}
+              {subjectGroups.length > 0 && (
+                <div className="space-y-2">
+                  <Label htmlFor="subject-group-select">Предметная группа (11–12 класс)</Label>
+                  <Select
+                    value={formData.subject_group_id?.toString() || ''}
+                    onValueChange={(value) => handleInputChange('subject_group_id', value ? parseInt(value) : undefined)}
+                  >
+                    <SelectTrigger id="subject-group-select">
+                      <SelectValue placeholder="Выберите группу или оставьте пустым" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Без группы</SelectItem>
+                      {subjectGroups
+                        .filter((g) => !formData.subject_id || g.subject_id === formData.subject_id)
+                        .map((g) => (
+                          <SelectItem key={g.id} value={g.id.toString()}>
+                            {g.subject_name} — {g.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

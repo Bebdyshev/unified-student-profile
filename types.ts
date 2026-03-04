@@ -34,6 +34,18 @@ export interface UpdateSubgroup {
   is_active?: number;
 }
 
+export interface SubjectGroup {
+  id: number;
+  grade_id: number;
+  subject_id: number;
+  name: string;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+  grade_name?: string;
+  subject_name?: string;
+}
+
 export interface CuratorAssignment {
   id: number;
   curator_id: number;
@@ -54,6 +66,7 @@ export interface TeacherAssignment {
   subject_id: number;
   grade_id?: number;
   subgroup_id?: number;
+  subject_group_id?: number;
   is_active: number;
   created_at: string;
   updated_at: string;
@@ -61,6 +74,7 @@ export interface TeacherAssignment {
   subject_name?: string;
   grade_name?: string;
   subgroup_name?: string;
+  subject_group_name?: string;
 }
 
 export interface CreateTeacherAssignment {
@@ -68,10 +82,12 @@ export interface CreateTeacherAssignment {
   subject_id: number;
   grade_id?: number;
   subgroup_id?: number;
+  subject_group_id?: number;
 }
 
 export interface UpdateTeacherAssignment {
   is_active?: number;
+  subject_group_id?: number;
 }
 
 export interface DisciplinaryAction {

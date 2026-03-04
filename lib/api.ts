@@ -404,9 +404,11 @@ class ApiService {
     success: boolean;
     total_processed: number;
     created_count: number;
+    updated_count: number;
     error_count: number;
     errors: Array<{ row: number; error: string; data: any }>;
     created_users: Array<{ id: number; name: string; email: string; position?: string; subject?: string }>;
+    row_results?: Array<{ row: number; status: string; message: string; teacher_name?: string; class_name?: string; subject_name?: string; subject_group_name?: string }>;
   }> {
     try {
       const formData = new FormData();
@@ -916,6 +918,51 @@ class ApiService {
     }
   }
 
+  async getSubjectGroups(params?: { grade_id?: number; subject_id?: number }): Promise<import('@/types').SubjectGroup[]> {
+    try {
+      const response = await apiClient.get('/subject-groups/', { params });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async getSubjectGroupsByGrade(gradeId: number): Promise<import('@/types').SubjectGroup[]> {
+    try {
+      const response = await apiClient.get(`/subject-groups/by-grade/${gradeId}`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async createSubjectGroup(data: { grade_id: number; subject_id: number; name: string }): Promise<{ id: number; message: string }> {
+    try {
+      const response = await apiClient.post('/subject-groups/', data);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async updateSubjectGroup(groupId: number, data: { name?: string; is_active?: number }): Promise<{ message: string }> {
+    try {
+      const response = await apiClient.put(`/subject-groups/${groupId}`, data);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async deleteSubjectGroup(groupId: number): Promise<{ message: string }> {
+    try {
+      const response = await apiClient.delete(`/subject-groups/${groupId}`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
   async getSubgroupStudents(subgroupId: number): Promise<import('@/types').Student[]> {
     try {
       const response = await apiClient.get(`/subgroups/${subgroupId}/students`);
@@ -931,6 +978,7 @@ class ApiService {
     subject_id?: number;
     teacher_id?: number;
     subgroup_id?: number;
+    subject_group_id?: number;
   }): Promise<import('@/types').TeacherAssignment[]> {
     try {
       const response = await apiClient.get('/assignments/', { params });
@@ -1216,6 +1264,7 @@ class ApiService {
     teacher_name: string;
     semester?: number;
     subgroup_id?: number;
+    subject_group_id?: number;
     file: File;
   }): Promise<import('@/types').ExcelUploadResponse> {
     try {
@@ -1228,6 +1277,9 @@ class ApiService {
       }
       if (uploadData.subgroup_id) {
         formData.append('subgroup_id', uploadData.subgroup_id.toString());
+      }
+      if (uploadData.subject_group_id) {
+        formData.append('subject_group_id', uploadData.subject_group_id.toString());
       }
       formData.append('file', uploadData.file);
 
