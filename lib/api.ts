@@ -117,6 +117,7 @@ export interface UpdateStudentRequest {
   phone?: string;
   parent_contact?: string;
   is_active?: number;
+  grade_id?: number;
 }
 
 // Grade types
