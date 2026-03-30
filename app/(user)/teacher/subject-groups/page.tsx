@@ -102,18 +102,6 @@ export default function TeacherSubjectGroupsPage() {
     loadBase()
   }, [loadBase])
 
-  useEffect(() => {
-    if (!createOpen) return
-    if (anchorOptions.length === 0) {
-      setCreateAnchorId('')
-      return
-    }
-    const stillValid = anchorOptions.some((o) => String(o.grade_id) === createAnchorId)
-    if (!stillValid) {
-      setCreateAnchorId(String(anchorOptions[0].grade_id))
-    }
-  }, [createOpen, anchorOptions, createAnchorId])
-
   const subjectOptions = useMemo(() => {
     const map = new Map<number, string>()
     for (const a of assignments) {
@@ -142,6 +130,18 @@ export default function TeacherSubjectGroupsPage() {
     }
     return rows
   }, [assignments, createSubjectId])
+
+  useEffect(() => {
+    if (!createOpen) return
+    if (anchorOptions.length === 0) {
+      setCreateAnchorId('')
+      return
+    }
+    const stillValid = anchorOptions.some((o) => String(o.grade_id) === createAnchorId)
+    if (!stillValid) {
+      setCreateAnchorId(String(anchorOptions[0].grade_id))
+    }
+  }, [createOpen, anchorOptions, createAnchorId])
 
   const selectedGroup = useMemo(
     () => groups.find((g) => g.id === selectedGroupId) ?? null,
