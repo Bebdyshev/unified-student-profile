@@ -52,10 +52,16 @@ export default function DashBoardPage() {
   }, [isAuthenticated, authLoading, router]);
 
   useEffect(() => {
-    if (!authCheckLoading && user && user.type !== 'admin') {
-      toast.error('Доступ запрещен. Только администраторы могут просматривать панель управления.');
-      router.push('/teacher/dashboard');
+    if (authCheckLoading || !user) return
+    if (user.type === 'admin') return
+    if (user.type === 'teacher') {
+      router.replace('/teacher/dashboard')
+      return
     }
+    // Curator and other non-admin roles should stay in general dashboard area.
+    // Redirecting them to teacher route caused redirect loops.
+    toast.info('Панель overview доступна только администратору. Открыт список студентов.')
+    router.replace('/dashboard/students')
   }, [user, authCheckLoading, router]);
 
   useEffect(() => {
