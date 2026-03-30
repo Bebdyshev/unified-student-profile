@@ -45,6 +45,11 @@ interface StudentFormState {
   grade_id: string
 }
 
+const getGradeDisplayName = (grade: Grade): string => {
+  if (grade.grade && grade.parallel && grade.grade.includes(grade.parallel)) return grade.grade
+  return `${grade.grade} ${grade.parallel}`.trim()
+}
+
 export default function StudentsPage() {
   const router = useRouter()
   const { isAuthenticated, loading: authLoading } = useAuth()
@@ -103,11 +108,32 @@ export default function StudentsPage() {
     setSelectedStudentIds((previous) => previous.filter((id) => filteredIds.has(id)))
   }, [filteredStudents])
 
+  const uniqueGrades = useMemo(() => {
+    const uniqueByLabel = new Map<string, Grade>()
+    for (const grade of grades) {
+      const label = getGradeDisplayName(grade)
+      if (!uniqueByLabel.has(label)) {
+        uniqueByLabel.set(label, grade)
+      }
+    }
+
+    return Array.from(uniqueByLabel.values()).sort((a, b) => {
+      const aMatch = String(a.grade).match(/^(\d+)\s*([A-Za-zА-Яа-яЁёІіҢңҒғҚқӨөҰұҮүҺһ]*)/)
+      const bMatch = String(b.grade).match(/^(\d+)\s*([A-Za-zА-Яа-яЁёІіҢңҒғҚқӨөҰұҮүҺһ]*)/)
+      const aNum = aMatch ? parseInt(aMatch[1], 10) : 0
+      const bNum = bMatch ? parseInt(bMatch[1], 10) : 0
+      if (aNum !== bNum) return aNum - bNum
+      const aLetter = aMatch?.[2] || String(a.parallel || '')
+      const bLetter = bMatch?.[2] || String(b.parallel || '')
+      return aLetter.localeCompare(bLetter)
+    })
+  }, [grades])
+
   const parallels = useMemo(
     () =>
       Array.from(
         new Set(
-          grades
+          uniqueGrades
             .map((grade) => {
               const match = grade.grade.match(/^(\d+)/)
               return match ? match[1] : null
@@ -115,13 +141,13 @@ export default function StudentsPage() {
             .filter(Boolean)
         )
       ).sort((a, b) => parseInt(a!) - parseInt(b!)),
-    [grades]
+    [uniqueGrades]
   )
 
   const filteredGrades = useMemo(() => {
-    if (selectedParallel === 'all') return grades
-    return grades.filter((grade) => grade.grade.startsWith(selectedParallel))
-  }, [grades, selectedParallel])
+    if (selectedParallel === 'all') return uniqueGrades
+    return uniqueGrades.filter((grade) => grade.grade.startsWith(selectedParallel))
+  }, [uniqueGrades, selectedParallel])
 
   const isAllFilteredSelected = filteredStudents.length > 0 && filteredStudents.every((student) => selectedStudentIds.includes(student.id))
 
@@ -186,7 +212,7 @@ export default function StudentsPage() {
     }
 
     if (selectedGrade !== 'all') {
-      filtered = filtered.filter((student) => student.grade_info && `${student.grade_info.grade}_${student.grade_info.parallel}` === selectedGrade)
+      filtered = filtered.filter((student) => String(student.grade_id) === selectedGrade)
     } else if (selectedParallel !== 'all') {
       filtered = filtered.filter((student) => student.grade_info && student.grade_info.grade.startsWith(selectedParallel))
     }
@@ -482,8 +508,8 @@ export default function StudentsPage() {
                   <SelectContent>
                     <SelectItem value="all">Все классы</SelectItem>
                     {filteredGrades.map((grade) => (
-                      <SelectItem key={grade.id} value={`${grade.grade}_${grade.parallel}`}>
-                        {grade.grade && grade.parallel && grade.grade.includes(grade.parallel) ? grade.grade : `${grade.grade} ${grade.parallel}`}
+                      <SelectItem key={grade.id} value={String(grade.id)}>
+                        {getGradeDisplayName(grade)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -528,9 +554,9 @@ export default function StudentsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Выберите класс</SelectItem>
-                    {grades.map((grade) => (
+                    {uniqueGrades.map((grade) => (
                       <SelectItem key={grade.id} value={String(grade.id)}>
-                        {grade.grade} {grade.parallel}
+                        {getGradeDisplayName(grade)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -664,9 +690,9 @@ export default function StudentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Выберите класс</SelectItem>
-                  {grades.map((grade) => (
+                  {uniqueGrades.map((grade) => (
                     <SelectItem key={grade.id} value={String(grade.id)}>
-                      {grade.grade} {grade.parallel}
+                      {getGradeDisplayName(grade)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -705,9 +731,9 @@ export default function StudentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Выберите класс</SelectItem>
-                  {grades.map((grade) => (
+                  {uniqueGrades.map((grade) => (
                     <SelectItem key={grade.id} value={String(grade.id)}>
-                      {grade.grade} {grade.parallel}
+                      {getGradeDisplayName(grade)}
                     </SelectItem>
                   ))}
                 </SelectContent>
