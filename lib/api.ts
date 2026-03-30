@@ -989,6 +989,71 @@ class ApiService {
     }
   }
 
+  async getMySubjectGroups(): Promise<import('@/types').SubjectGroup[]> {
+    try {
+      const response = await apiClient.get('/subject-groups/my');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async createTeacherSubjectGroup(data: {
+    subject_id: number;
+    name: string;
+    anchor_grade_id: number;
+  }): Promise<{ id: number; message: string }> {
+    try {
+      const response = await apiClient.post('/subject-groups/teacher', data);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async getSubjectGroupMembers(groupId: number): Promise<import('@/types').SubjectGroupMemberRow[]> {
+    try {
+      const response = await apiClient.get(`/subject-groups/${groupId}/members`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async addSubjectGroupMembers(
+    groupId: number,
+    studentIds: number[]
+  ): Promise<{ message: string; added_or_reactivated: number; errors: string[] }> {
+    try {
+      const response = await apiClient.post(`/subject-groups/${groupId}/members`, {
+        student_ids: studentIds
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async removeSubjectGroupMember(groupId: number, studentId: number): Promise<{ message: string }> {
+    try {
+      const response = await apiClient.delete(`/subject-groups/${groupId}/members/${studentId}`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async getSubjectGroupParallelStudents(
+    groupId: number
+  ): Promise<import('@/types').SubjectGroupParallelStudent[]> {
+    try {
+      const response = await apiClient.get(`/subject-groups/${groupId}/parallel-students`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
   async getSubgroupStudents(subgroupId: number): Promise<import('@/types').Student[]> {
     try {
       const response = await apiClient.get(`/subgroups/${subgroupId}/students`);

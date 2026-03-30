@@ -39,7 +39,8 @@ import {
   GraduationCap,
   UserCheck,
   School,
-  BarChart3
+  BarChart3,
+  Layers
 } from 'lucide-react';
 export type Icon = LucideIcon;
 
@@ -81,6 +82,7 @@ export const Icons = {
   school: School,
   fileEdit: FileEdit,
   barChart: BarChart3,
+  layers: Layers,
   gitHub: ({ ...props }: LucideProps) => (
     <svg
       aria-hidden="true"

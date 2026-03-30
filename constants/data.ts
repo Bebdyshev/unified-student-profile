@@ -182,6 +182,14 @@ export const navItems: NavItem[] = [
     teacherOnly: true
   },
   {
+    title: 'Предметные группы',
+    url: '/teacher/subject-groups',
+    icon: 'layers',
+    isActive: false,
+    items: [],
+    teacherOnly: true
+  },
+  {
     title: 'Настройки системы',
     url: '/admin/settings',
     icon: 'settings',

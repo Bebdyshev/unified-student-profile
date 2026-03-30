@@ -44,6 +44,23 @@ export interface SubjectGroup {
   updated_at: string;
   grade_name?: string;
   subject_name?: string;
+  owner_teacher_id?: number | null;
+}
+
+export interface SubjectGroupMemberRow {
+  id: number;
+  student_id: number;
+  name: string | null;
+  grade_id: number | null;
+  grade_name: string | null;
+  is_active: number;
+}
+
+export interface SubjectGroupParallelStudent {
+  id: number;
+  name: string | null;
+  grade_id: number;
+  grade_name: string | null;
 }
 
 export interface CuratorAssignment {
