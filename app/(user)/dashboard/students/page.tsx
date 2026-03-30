@@ -46,8 +46,20 @@ interface StudentFormState {
 }
 
 const getGradeDisplayName = (grade: Grade): string => {
-  if (grade.grade && grade.parallel && grade.grade.includes(grade.parallel)) return grade.grade
-  return `${grade.grade} ${grade.parallel}`.trim()
+  const rawGrade = String(grade.grade || '').trim()
+  const rawParallel = String(grade.parallel || '').trim().toUpperCase()
+
+  const compact = rawGrade.replace(/\s+/g, '')
+  const match = compact.match(/^(\d{1,2})([A-Za-zА-Яа-яЁёІіҢңҒғҚқӨөҰұҮүҺһ])$/)
+  if (match) return `${match[1]}${match[2].toUpperCase()}`
+
+  if (!rawGrade && rawParallel) return rawParallel
+  if (!rawParallel) return rawGrade
+
+  const gradeNum = rawGrade.match(/^(\d{1,2})/)
+  if (gradeNum) return `${gradeNum[1]}${rawParallel}`
+
+  return `${rawGrade} ${rawParallel}`.trim()
 }
 
 export default function StudentsPage() {
