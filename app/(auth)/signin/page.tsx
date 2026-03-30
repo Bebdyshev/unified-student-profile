@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from '@/lib/api';
@@ -15,7 +15,6 @@ import {
 import Image from "next/image";
 import { TypeAnimation } from "react-type-animation";
 import { ApiError } from "@/utils/errorHandler";
-import { env } from "process";
 
 const commonStyles = {
   inputIcon: "absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none",
@@ -31,8 +30,33 @@ export default function SignIn() {
   const [formData, setFormData] = useState({ email: "", password: "", company_name: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const typingPhrases = ["Сервис для мониторинга за успеваемостью учеников"];
+
+  useEffect(() => {
+    const redirectIfAuthorized = async () => {
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        setCheckingAuth(false);
+        return;
+      }
+
+      try {
+        const userInfo = await api.getCurrentUser();
+        if (userInfo.type === 'teacher') {
+          router.replace('/teacher/dashboard');
+          return;
+        }
+        router.replace('/dashboard');
+      } catch {
+        localStorage.removeItem('access_token');
+        setCheckingAuth(false);
+      }
+    };
+
+    redirectIfAuthorized();
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -115,7 +139,13 @@ export default function SignIn() {
     }
   };
 
-  console.log(process.env.NEXT_PUBLIC_BACKEND_URL)
+  if (checkingAuth) {
+    return (
+      <section className="bg-white min-h-screen flex items-center justify-center">
+        <p className="text-gray-500">Проверка авторизации...</p>
+      </section>
+    )
+  }
 
   return (
     <section className="bg-white max-h-screen">
