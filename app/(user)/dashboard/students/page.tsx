@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,8 @@ import {
   AlertTriangle,
   Users,
   Filter,
-  UserCheck
+  UserCheck,
+  Upload
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
@@ -57,6 +58,8 @@ export default function StudentsPage() {
   const [selectedGrade, setSelectedGrade] = useState<string>('all');
   const [selectedDangerLevel, setSelectedDangerLevel] = useState<string>('all');
   const [selectedParallel, setSelectedParallel] = useState<string>('all');
+  const [isUploadingStudents, setIsUploadingStudents] = useState(false);
+  const bulkUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   // Read filters from URL parameters
   useEffect(() => {
@@ -201,6 +204,42 @@ export default function StudentsPage() {
     router.push(`/dashboard/students/${studentId}`);
   };
 
+  const handleOpenBulkUpload = () => {
+    if (isUploadingStudents) return;
+    bulkUploadInputRef.current?.click();
+  };
+
+  const handleBulkUploadStudents = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+      toast.error('Загрузите Excel файл формата .xlsx или .xls');
+      return;
+    }
+
+    try {
+      setIsUploadingStudents(true);
+      const result = await api.bulkUploadStudents(file);
+      const successMessage = `Импорт завершен: добавлено ${result.created_count}, обновлено ${result.updated_count}, пропущено ${result.skipped_count}`;
+
+      if (result.error_count > 0) {
+        toast.warning(`${successMessage}. Ошибок: ${result.error_count}`);
+      } else {
+        toast.success(successMessage);
+      }
+
+      await fetchData();
+    } catch (error: any) {
+      const normalized = (error && error.isApiError) ? error : handleApiError(error);
+      toast.error(normalized.message || 'Не удалось выполнить bulk upload учащихся');
+    } finally {
+      setIsUploadingStudents(false);
+    }
+  };
+
   if (loading) {
     return (
       <PageContainer scrollable>
@@ -223,6 +262,17 @@ export default function StudentsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <input
+              ref={bulkUploadInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleBulkUploadStudents}
+            />
+            <Button variant="outline" onClick={handleOpenBulkUpload} disabled={isUploadingStudents}>
+              <Upload className="h-4 w-4 mr-2" />
+              {isUploadingStudents ? 'Загрузка...' : 'Bulk upload Excel'}
+            </Button>
             <Badge variant="outline" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Всего: {students.length}

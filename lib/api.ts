@@ -615,6 +615,31 @@ class ApiService {
     }
   }
 
+  async bulkUploadStudents(file: File): Promise<{
+    success: boolean
+    total_processed: number
+    created_count: number
+    updated_count: number
+    skipped_count: number
+    error_count: number
+    errors: Array<{ row: number; error: string; data: any }>
+  }> {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await apiClient.post('/grades/students/bulk-upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      })
+
+      return response.data
+    } catch (error) {
+      throw handleApiError(error)
+    }
+  }
+
   // Score management
   async updateScore(scoreId: number, scoreData: {
     actual_scores?: Record<string, number>;
