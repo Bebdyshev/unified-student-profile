@@ -51,7 +51,7 @@ const parallelFromGradeLabel = (name: string | null | undefined): number | null 
 const letterFromGradeLabel = (name: string | null | undefined): string => {
   if (!name) return ''
   const t = String(name).trim()
-  const m = t.match(/^(\d{1,2})\s*([A-Za-zА-Яа-яЁёІіҢңҒғҚқӨөҰұҮүҺһ]?)/u)
+  const m = t.match(/^(\d{1,2})\s*([A-Za-zА-Яа-яЁёІіҢңҒғҚқӨөҰұҮүҺһ]?)/)
   if (m && m[2]) return m[2].toUpperCase()
   const tail = t.replace(/^\d{1,2}\s*/, '').trim()
   return tail ? tail.charAt(0).toUpperCase() : ''
