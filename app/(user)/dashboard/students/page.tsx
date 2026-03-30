@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useRef, useState, useEffect } from 'react'
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PageContainer from '@/components/layout/page-container'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,12 +11,13 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Search, User, Eye, GraduationCap, AlertTriangle, Users, Filter, UserCheck, Upload, Pencil, Trash2, Plus } from 'lucide-react'
+import { Search, AlertTriangle, Users, Filter, UserCheck, Upload, Plus } from 'lucide-react'
 import api from '@/lib/api'
 import { useAuth } from '@/hooks/use-auth'
 import { handleApiError } from '@/utils/errorHandler'
 import { toast } from 'sonner'
 import type { Student, Grade, Subgroup } from '@/types'
+import { StudentListRow } from './_components/student-list-row'
 
 const DANGER_LEVEL_COLORS = {
   0: 'bg-green-100 text-green-800',
@@ -62,6 +63,15 @@ const getGradeDisplayName = (grade: Grade): string => {
   return `${rawGrade} ${rawParallel}`.trim()
 }
 
+const getGradeParallelKey = (grade: Grade): string => {
+  const gradeText = String(grade.grade || '').trim()
+  const match = gradeText.match(/^(\d{1,2})/)
+  if (match) return match[1]
+  const parallelText = String(grade.parallel || '').trim()
+  const parallelMatch = parallelText.match(/^(\d{1,2})/)
+  return parallelMatch ? parallelMatch[1] : ''
+}
+
 export default function StudentsPage() {
   const router = useRouter()
   const { isAuthenticated, loading: authLoading } = useAuth()
@@ -80,11 +90,14 @@ export default function StudentsPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([])
   const [bulkTargetGradeId, setBulkTargetGradeId] = useState<string>('none')
+  const [bulkTargetParallel, setBulkTargetParallel] = useState<string>('none')
   const [isBulkProcessing, setIsBulkProcessing] = useState(false)
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingStudent, setEditingStudent] = useState<StudentWithGrade | null>(null)
+  const [createParallel, setCreateParallel] = useState<string>('none')
+  const [editParallel, setEditParallel] = useState<string>('none')
   const [studentForm, setStudentForm] = useState<StudentFormState>({
     name: '',
     email: '',
@@ -161,7 +174,35 @@ export default function StudentsPage() {
     return uniqueGrades.filter((grade) => grade.grade.startsWith(selectedParallel))
   }, [uniqueGrades, selectedParallel])
 
+  const gradesByParallel = useMemo(() => {
+    const grouped = new Map<string, Grade[]>()
+    uniqueGrades.forEach((grade) => {
+      const key = getGradeParallelKey(grade)
+      if (!key) return
+      const current = grouped.get(key) || []
+      current.push(grade)
+      grouped.set(key, current)
+    })
+    return grouped
+  }, [uniqueGrades])
+
+  const createParallelGrades = useMemo(() => {
+    if (createParallel === 'none') return []
+    return gradesByParallel.get(createParallel) || []
+  }, [createParallel, gradesByParallel])
+
+  const editParallelGrades = useMemo(() => {
+    if (editParallel === 'none') return []
+    return gradesByParallel.get(editParallel) || []
+  }, [editParallel, gradesByParallel])
+
+  const bulkParallelGrades = useMemo(() => {
+    if (bulkTargetParallel === 'none') return []
+    return gradesByParallel.get(bulkTargetParallel) || []
+  }, [bulkTargetParallel, gradesByParallel])
+
   const isAllFilteredSelected = filteredStudents.length > 0 && filteredStudents.every((student) => selectedStudentIds.includes(student.id))
+  const selectedStudentIdSet = useMemo(() => new Set(selectedStudentIds), [selectedStudentIds])
 
   const fetchData = async () => {
     try {
@@ -176,12 +217,12 @@ export default function StudentsPage() {
       setIsAdmin(currentUser.type === 'admin')
       setGrades(gradesData)
 
-      const allStudents: StudentWithGrade[] = []
+      const studentsById = new Map<number, StudentWithGrade>()
       if (classData.class_data) {
         classData.class_data.forEach((classInfo: any) => {
           classInfo.class.forEach((student: any) => {
             const gradeInfo = gradesData.find((grade) => grade.grade === student.class_liter)
-            allStudents.push({
+            const candidate: StudentWithGrade = {
               id: student.id,
               name: student.student_name,
               email: student.email || undefined,
@@ -197,12 +238,26 @@ export default function StudentsPage() {
               grade_info: gradeInfo,
               average_score: student.avg_percentage || 0,
               danger_level: student.danger_level || 0
-            })
+            }
+
+            const existing = studentsById.get(student.id)
+            if (!existing) {
+              studentsById.set(student.id, candidate)
+              return
+            }
+
+            const existingAvg = Number(existing.average_score || 0)
+            const candidateAvg = Number(candidate.average_score || 0)
+            const shouldReplace = candidateAvg > existingAvg
+
+            if (shouldReplace) {
+              studentsById.set(student.id, candidate)
+            }
           })
         })
       }
 
-      setStudents(allStudents)
+      setStudents(Array.from(studentsById.values()))
     } catch (error: any) {
       const normalized = error && error.isApiError ? error : handleApiError(error)
       if (normalized.status === 404) {
@@ -237,9 +292,9 @@ export default function StudentsPage() {
     setFilteredStudents(filtered)
   }
 
-  const handleViewProfile = (studentId: number) => {
+  const handleViewProfile = useCallback((studentId: number) => {
     router.push(`/dashboard/students/${studentId}`)
-  }
+  }, [router])
 
   const handleOpenBulkUpload = () => {
     if (isUploadingStudents) return
@@ -275,13 +330,13 @@ export default function StudentsPage() {
     }
   }
 
-  const handleToggleStudentSelection = (studentId: number, checked: boolean) => {
+  const handleToggleStudentSelection = useCallback((studentId: number, checked: boolean) => {
     if (checked) {
       setSelectedStudentIds((previous) => [...previous, studentId])
       return
     }
     setSelectedStudentIds((previous) => previous.filter((id) => id !== studentId))
-  }
+  }, [])
 
   const handleToggleSelectAllFiltered = (checked: boolean) => {
     if (!checked) {
@@ -295,20 +350,24 @@ export default function StudentsPage() {
     setSelectedStudentIds(Array.from(merged))
   }
 
-  const openCreateDialog = () => {
+  const openCreateDialog = useCallback(() => {
     setStudentForm({ name: '', email: '', grade_id: '' })
+    setCreateParallel('none')
     setIsCreateDialogOpen(true)
-  }
+  }, [])
 
-  const openEditDialog = (student: StudentWithGrade) => {
+  const openEditDialog = useCallback((student: StudentWithGrade) => {
+    const studentGrade = uniqueGrades.find((grade) => grade.id === student.grade_id)
+    const parallelKey = studentGrade ? getGradeParallelKey(studentGrade) : 'none'
     setEditingStudent(student)
     setStudentForm({
       name: student.name || '',
       email: student.email || '',
       grade_id: student.grade_id ? String(student.grade_id) : ''
     })
+    setEditParallel(parallelKey || 'none')
     setIsEditDialogOpen(true)
-  }
+  }, [uniqueGrades])
 
   const handleCreateStudent = async () => {
     if (!studentForm.name.trim() || !studentForm.grade_id) {
@@ -354,7 +413,7 @@ export default function StudentsPage() {
     }
   }
 
-  const handleDeleteStudent = async (studentId: number) => {
+  const handleDeleteStudent = useCallback(async (studentId: number) => {
     const isConfirmed = window.confirm('Удалить ученика? Это действие нельзя отменить')
     if (!isConfirmed) return
 
@@ -367,7 +426,7 @@ export default function StudentsPage() {
       const normalized = error && error.isApiError ? error : handleApiError(error)
       toast.error(normalized.message || 'Не удалось удалить ученика')
     }
-  }
+  }, [])
 
   const handleBulkDelete = async () => {
     if (selectedStudentIds.length === 0) return
@@ -389,8 +448,8 @@ export default function StudentsPage() {
   }
 
   const handleBulkMoveToGrade = async () => {
-    if (selectedStudentIds.length === 0 || bulkTargetGradeId === 'none') {
-      toast.error('Выберите учеников и класс для переноса')
+    if (selectedStudentIds.length === 0 || bulkTargetParallel === 'none' || bulkTargetGradeId === 'none') {
+      toast.error('Выберите учеников, параллель и класс для переноса')
       return
     }
 
@@ -409,6 +468,7 @@ export default function StudentsPage() {
       if (updatedCount > 0) toast.success(`Перенесено в класс: ${updatedCount}`)
       if (failedCount > 0) toast.warning(`Не удалось перенести: ${failedCount}`)
       setSelectedStudentIds([])
+      setBulkTargetParallel('none')
       setBulkTargetGradeId('none')
       await fetchData()
     } finally {
@@ -560,20 +620,43 @@ export default function StudentsPage() {
                 <Button variant="destructive" disabled={selectedStudentIds.length === 0 || isBulkProcessing} onClick={handleBulkDelete}>
                   Удалить выбранных
                 </Button>
+                <Select
+                  value={bulkTargetParallel}
+                  onValueChange={(value) => {
+                    setBulkTargetParallel(value)
+                    setBulkTargetGradeId('none')
+                  }}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Параллель" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Параллель</SelectItem>
+                    {parallels.map((parallel) => (
+                      <SelectItem key={parallel!} value={parallel!}>
+                        {parallel} класс
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select value={bulkTargetGradeId} onValueChange={setBulkTargetGradeId}>
                   <SelectTrigger className="w-[220px]">
                     <SelectValue placeholder="Перенести в класс" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Выберите класс</SelectItem>
-                    {uniqueGrades.map((grade) => (
+                    {bulkParallelGrades.map((grade) => (
                       <SelectItem key={grade.id} value={String(grade.id)}>
                         {getGradeDisplayName(grade)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" disabled={selectedStudentIds.length === 0 || bulkTargetGradeId === 'none' || isBulkProcessing} onClick={handleBulkMoveToGrade}>
+                <Button
+                  variant="outline"
+                  disabled={selectedStudentIds.length === 0 || bulkTargetParallel === 'none' || bulkTargetGradeId === 'none' || isBulkProcessing}
+                  onClick={handleBulkMoveToGrade}
+                >
                   Перенести выбранных
                 </Button>
               </div>
@@ -608,70 +691,19 @@ export default function StudentsPage() {
                 )}
 
                 {filteredStudents.map((student) => (
-                  <div
+                  <StudentListRow
                     key={student.id}
-                    className="flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50"
-                    onClick={() => handleViewProfile(student.id)}
-                  >
-                    <div className="flex items-center space-x-4">
-                      {isAdmin && (
-                        <div onClick={(event) => event.stopPropagation()}>
-                          <Checkbox checked={selectedStudentIds.includes(student.id)} onCheckedChange={(value) => handleToggleStudentSelection(student.id, Boolean(value))} />
-                        </div>
-                      )}
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                        <User className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="font-medium">{student.name}</h4>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          {student.grade_info && (
-                            <span className="flex items-center gap-1">
-                              <GraduationCap className="h-3 w-3" />
-                              {student.grade_info.grade && student.grade_info.parallel && student.grade_info.grade.includes(student.grade_info.parallel)
-                                ? student.grade_info.grade
-                                : `${student.grade_info.grade} ${student.grade_info.parallel}`}
-                            </span>
-                          )}
-                          {student.email && <span>• {student.email}</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {student.average_score !== undefined && <Badge variant="outline">{student.average_score}% средний балл</Badge>}
-                      <Badge className={DANGER_LEVEL_COLORS[student.danger_level as keyof typeof DANGER_LEVEL_COLORS]}>
-                        {DANGER_LEVEL_NAMES[student.danger_level as keyof typeof DANGER_LEVEL_NAMES]}
-                      </Badge>
-                      {isAdmin && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              openEditDialog(student)
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              handleDeleteStudent(student.id)
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </>
-                      )}
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+                    student={student}
+                    isAdmin={isAdmin}
+                    isSelected={selectedStudentIdSet.has(student.id)}
+                    dangerClassName={DANGER_LEVEL_COLORS[student.danger_level as keyof typeof DANGER_LEVEL_COLORS]}
+                    dangerLabel={DANGER_LEVEL_NAMES[student.danger_level as keyof typeof DANGER_LEVEL_NAMES]}
+                    gradeLabel={student.grade_info ? getGradeDisplayName(student.grade_info) : '-'}
+                    onViewProfile={handleViewProfile}
+                    onToggleSelect={handleToggleStudentSelection}
+                    onEdit={openEditDialog}
+                    onDelete={handleDeleteStudent}
+                  />
                 ))}
               </div>
             )}
@@ -695,6 +727,28 @@ export default function StudentsPage() {
               <Input value={studentForm.email} onChange={(event) => setStudentForm((previous) => ({ ...previous, email: event.target.value }))} placeholder="student@example.com" />
             </div>
             <div className="space-y-2">
+              <Label>Параллель</Label>
+              <Select
+                value={createParallel}
+                onValueChange={(value) => {
+                  setCreateParallel(value)
+                  setStudentForm((previous) => ({ ...previous, grade_id: '' }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите параллель" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Выберите параллель</SelectItem>
+                  {parallels.map((parallel) => (
+                    <SelectItem key={parallel!} value={parallel!}>
+                      {parallel} класс
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Класс</Label>
               <Select value={studentForm.grade_id || 'none'} onValueChange={(value) => setStudentForm((previous) => ({ ...previous, grade_id: value === 'none' ? '' : value }))}>
                 <SelectTrigger>
@@ -702,7 +756,7 @@ export default function StudentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Выберите класс</SelectItem>
-                  {uniqueGrades.map((grade) => (
+                  {createParallelGrades.map((grade) => (
                     <SelectItem key={grade.id} value={String(grade.id)}>
                       {getGradeDisplayName(grade)}
                     </SelectItem>
@@ -736,6 +790,28 @@ export default function StudentsPage() {
               <Input value={studentForm.email} onChange={(event) => setStudentForm((previous) => ({ ...previous, email: event.target.value }))} placeholder="student@example.com" />
             </div>
             <div className="space-y-2">
+              <Label>Параллель</Label>
+              <Select
+                value={editParallel}
+                onValueChange={(value) => {
+                  setEditParallel(value)
+                  setStudentForm((previous) => ({ ...previous, grade_id: '' }))
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите параллель" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Выберите параллель</SelectItem>
+                  {parallels.map((parallel) => (
+                    <SelectItem key={parallel!} value={parallel!}>
+                      {parallel} класс
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Класс</Label>
               <Select value={studentForm.grade_id || 'none'} onValueChange={(value) => setStudentForm((previous) => ({ ...previous, grade_id: value === 'none' ? '' : value }))}>
                 <SelectTrigger>
@@ -743,7 +819,7 @@ export default function StudentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Выберите класс</SelectItem>
-                  {uniqueGrades.map((grade) => (
+                  {editParallelGrades.map((grade) => (
                     <SelectItem key={grade.id} value={String(grade.id)}>
                       {getGradeDisplayName(grade)}
                     </SelectItem>
