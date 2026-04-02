@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'react-toastify';
-import { Users, BookOpen, School, AlertTriangle } from 'lucide-react';
+import { Users, BookOpen, School, AlertTriangle, FileText } from 'lucide-react';
 import { handleApiError } from '@/utils/errorHandler';
 import api from '@/lib/api';
 import Link from 'next/link';
@@ -192,6 +192,12 @@ export default function TeacherDashboardPage() {
               <Button variant="outline">
                 <Users className="mr-2 h-4 w-4" />
                 Мои студенты
+              </Button>
+            </Link>
+            <Link href="/teacher/lesson-breakdown">
+              <Button variant="outline">
+                <FileText className="mr-2 h-4 w-4" />
+                Расшифровка уроков
               </Button>
             </Link>
           </div>

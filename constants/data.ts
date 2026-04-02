@@ -190,6 +190,14 @@ export const navItems: NavItem[] = [
     teacherOnly: true
   },
   {
+    title: 'Расшифровка уроков',
+    url: '/teacher/lesson-breakdown',
+    icon: 'forms',
+    isActive: false,
+    items: [],
+    teacherOnly: true
+  },
+  {
     title: 'Настройки системы',
     url: '/admin/settings',
     icon: 'settings',
