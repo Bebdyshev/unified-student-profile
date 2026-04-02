@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, User as UserIcon, Users as UsersIcon, GraduationCap, BookOpen, Search, Pencil } from 'lucide-react';
+import { Plus, User as UserIcon, Users as UsersIcon, GraduationCap, BookOpen, Search, Pencil, Download } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import type { User as AppUser, Subject } from '@/types';
@@ -395,6 +395,27 @@ export function UserManagement() {
               
               {!uploadResults ? (
                 <div className="space-y-4">
+                  <Button
+                    variant="outline"
+                    className="w-full flex items-center gap-2"
+                    onClick={async () => {
+                      try {
+                        const blob = await api.downloadTeachersTemplate();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'teachers_template.xlsx';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch (e: any) {
+                        toast.error('Не удалось скачать шаблон');
+                      }
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    Скачать шаблон
+                  </Button>
+
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                     <input
                       type="file"
@@ -415,23 +436,23 @@ export function UserManagement() {
                       </div>
                     </label>
                   </div>
-                  
+
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="text-sm font-medium mb-2">Формат файла (XLSX):</h4>
+                    <h4 className="text-sm font-medium mb-2">Формат файла:</h4>
                     <ul className="text-xs text-muted-foreground space-y-1">
-                      <li>• Столбец 1: № (необязательно)</li>
-                      <li>• Столбец 2: ФИО (обязательно)</li>
-                      <li>• Столбец 3: Должность</li>
-                      <li>• Столбец 4: Email (обязательно)</li>
-                      <li>• Столбец 5: Класс (например 11A, 10B)</li>
-                      <li>• Столбец 6: Предмет (физика, химия, информатика и т.д.)</li>
-                      <li>• Столбец 7: Предметная группа (только для 11–12 классов)</li>
+                      <li>• <strong>ФИО</strong> (обязательно)</li>
+                      <li>• <strong>Email</strong> (обязательно)</li>
+                      <li>• <strong>Классы</strong> — через запятую (например: 9A,10B,11C)</li>
+                      <li>• <strong>Предмет</strong> — из листа "Предметы"</li>
                     </ul>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Если у учителя несколько предметов — заполните отдельную строку для каждого предмета (ФИО и Email одинаковые).
+                    </p>
                     <p className="text-xs text-orange-600 mt-2">
-                      ⚠️ Пароль по умолчанию для новых учителей: <strong>123</strong>. Отсутствующие классы создаются автоматически.
+                      Пароль по умолчанию для новых учителей: <strong>123</strong>. Отсутствующие классы и предметы создаются автоматически.
                     </p>
                   </div>
-                  
+
                   <div className="flex items-center justify-end gap-2">
                     <Button
                       variant="outline"

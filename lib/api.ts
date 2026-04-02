@@ -1397,6 +1397,17 @@ class ApiService {
     }
   }
 
+  async downloadTeachersTemplate(): Promise<Blob> {
+    try {
+      const response = await apiClient.get('/users/teachers-template', {
+        responseType: 'blob',
+      });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
   // Student Profile
   async getStudentProfile(studentId: number): Promise<import('@/types').StudentProfile> {
     try {
