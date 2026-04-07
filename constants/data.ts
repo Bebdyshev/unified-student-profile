@@ -174,14 +174,6 @@ export const navItems: NavItem[] = [
     teacherOnly: true
   },
   {
-    title: 'Ввод оценок',
-    url: '/dashboard/teacher/grades',
-    icon: 'fileEdit',
-    isActive: false,
-    items: [],
-    teacherOnly: true
-  },
-  {
     title: 'Предметные группы',
     url: '/dashboard/teacher/subject-groups',
     icon: 'layers',
