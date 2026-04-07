@@ -73,23 +73,56 @@ export default function TeacherSubjectGroupsPage() {
   const [search, setSearch] = useState('')
   const [letterFilter, setLetterFilter] = useState<string>('all')
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set())
-
   const loadBase = useCallback(async () => {
     setLoading(true)
     try {
-      const [g, a] = await Promise.all([
-        api.getMySubjectGroups(),
-        api.getMyTeacherAssignments()
-      ])
-      setGroups(g)
-      setAssignments(
-        (a as TeacherAssignmentRow[]).map((x) => ({
+      // Detect user type
+      const currentUser = await api.getCurrentUser()
+      const isAdmin = currentUser.type === 'admin'
+
+      let assignmentsData: TeacherAssignmentRow[]
+
+      if (isAdmin) {
+        // Admin: load all subject groups + build assignments from all subjects & grades
+        const [allGroups, allSubjects, allGrades] = await Promise.all([
+          api.getMySubjectGroups().catch(() => [] as SubjectGroup[]),
+          api.getAllSubjects(),
+          api.getAllGrades()
+        ])
+        setGroups(allGroups)
+
+        // Build synthetic assignment rows from all subjects x all 11-12 grades
+        const rows: TeacherAssignmentRow[] = []
+        for (const subj of allSubjects) {
+          for (const grade of allGrades) {
+            const p = parallelFromGradeLabel(`${grade.grade}${grade.parallel}`)
+            if (p !== null) {
+              rows.push({
+                subject_id: subj.id,
+                subject_name: subj.name,
+                grade_id: grade.id,
+                grade_name: `${grade.grade}${grade.parallel}`
+              })
+            }
+          }
+        }
+        assignmentsData = rows
+      } else {
+        // Teacher: load own groups + own assignments
+        const [g, a] = await Promise.all([
+          api.getMySubjectGroups(),
+          api.getMyTeacherAssignments()
+        ])
+        setGroups(g)
+        assignmentsData = (a as TeacherAssignmentRow[]).map((x) => ({
           subject_id: x.subject_id,
           subject_name: x.subject_name,
           grade_id: x.grade_id,
           grade_name: x.grade_name
         }))
-      )
+      }
+
+      setAssignments(assignmentsData)
     } catch (err) {
       const e = handleApiError(err)
       toast.error(e.message)
