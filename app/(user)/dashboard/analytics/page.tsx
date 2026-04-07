@@ -285,12 +285,11 @@ export default function AnalyticsPage() {
     }
   };
 
-  // Get unique parallels from grades
+  // Get unique parallels (grade numbers like 7, 8, 9, 10, 11, 12) from grades
   const uniqueParallels = useMemo(() => {
     const parallels = new Set<string>();
     data.grades.forEach(g => {
-      if (g.parallel) parallels.add(g.parallel);
-      // Also extract parallel from grade name (e.g., "12 А" -> "12")
+      // Extract grade number (e.g., "12" from grade field)
       const match = g.grade.match(/^(\d+)/);
       if (match) parallels.add(match[1]);
     });
