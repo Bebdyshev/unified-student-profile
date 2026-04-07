@@ -159,7 +159,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Панель учителя',
-    url: '/teacher/dashboard',
+    url: '/dashboard/teacher',
     icon: 'bookOpen',
     isActive: false,
     items: [],
@@ -167,7 +167,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Мои классы',
-    url: '/teacher/classes',
+    url: '/dashboard/teacher/classes',
     icon: 'school',
     isActive: false,
     items: [],
@@ -175,7 +175,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Ввод оценок',
-    url: '/teacher/grades/entry',
+    url: '/dashboard/teacher/grades',
     icon: 'fileEdit',
     isActive: false,
     items: [],
@@ -183,7 +183,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Предметные группы',
-    url: '/teacher/subject-groups',
+    url: '/dashboard/teacher/subject-groups',
     icon: 'layers',
     isActive: false,
     items: [],
@@ -191,7 +191,7 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Расшифровка уроков',
-    url: '/teacher/lesson-breakdown',
+    url: '/dashboard/teacher/lesson-breakdown',
     icon: 'forms',
     isActive: false,
     items: [],

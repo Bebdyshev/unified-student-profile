@@ -45,7 +45,7 @@ export default function SignIn() {
       try {
         const userInfo = await api.getCurrentUser();
         if (userInfo.type === 'teacher') {
-          router.replace('/teacher/dashboard');
+          router.replace('/dashboard/teacher');
           return;
         }
         router.replace('/dashboard');
@@ -84,7 +84,7 @@ export default function SignIn() {
       try {
         const userInfo = await api.getCurrentUser();
         if (userInfo.type === 'teacher') {
-          router.push("/teacher/dashboard");
+          router.push("/dashboard/teacher");
         } else {
           router.push("/dashboard/home");
         }

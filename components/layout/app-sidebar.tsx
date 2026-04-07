@@ -85,7 +85,7 @@ export default function AppSidebar({
 
   const [mounted, setMounted] = React.useState(false);
   const pathname = usePathname();
-  const isTeacherRoute = pathname?.startsWith('/teacher');
+  const isTeacherRoute = pathname?.startsWith('/dashboard/teacher');
   // Only render after first client-side mount
   React.useEffect(() => {
     setMounted(true);

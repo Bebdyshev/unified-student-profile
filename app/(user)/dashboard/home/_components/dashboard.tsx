@@ -55,7 +55,7 @@ export default function DashBoardPage() {
     if (authCheckLoading || !user) return
     if (user.type === 'admin') return
     if (user.type === 'teacher') {
-      router.replace('/teacher/dashboard')
+      router.replace('/dashboard/teacher')
       return
     }
     // Curator and other non-admin roles should stay in general dashboard area.

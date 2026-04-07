@@ -163,7 +163,7 @@ export default function TeacherDashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <Link href={`/teacher/grades/entry?subject=${assignment.subject_id}&grade=${assignment.grade_id || ''}`}>
+                  <Link href={`/dashboard/teacher/grades?subject=${assignment.subject_id}&grade=${assignment.grade_id || ''}`}>
                     <Button variant="outline" size="sm">
                       Ввести оценки
                     </Button>
@@ -182,19 +182,19 @@ export default function TeacherDashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Link href="/teacher/grades/entry">
+            <Link href="/dashboard/teacher/grades">
               <Button>
                 <BookOpen className="mr-2 h-4 w-4" />
                 Ввести оценки
               </Button>
             </Link>
-            <Link href="/teacher/classes">
+            <Link href="/dashboard/teacher/classes">
               <Button variant="outline">
                 <Users className="mr-2 h-4 w-4" />
                 Мои студенты
               </Button>
             </Link>
-            <Link href="/teacher/lesson-breakdown">
+            <Link href="/dashboard/teacher/lesson-breakdown">
               <Button variant="outline">
                 <FileText className="mr-2 h-4 w-4" />
                 Расшифровка уроков

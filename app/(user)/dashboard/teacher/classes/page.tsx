@@ -127,7 +127,7 @@ export default function TeacherClassesPage() {
                   ))}
                 </div>
                 <Link 
-                  href={`/teacher/grades/entry?grade=${group.gradeId}&subject=${group.subjects[0]?.id || ''}`}
+                  href={`/dashboard/teacher/grades?grade=${group.gradeId}&subject=${group.subjects[0]?.id || ''}`}
                   className="block"
                 >
                   <Button variant="outline" className="w-full">

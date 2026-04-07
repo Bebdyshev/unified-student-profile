@@ -21,7 +21,7 @@ export default function Home() {
       try {
         const userInfo = await api.getCurrentUser()
         if (userInfo.type === 'teacher') {
-          router.replace('/teacher/dashboard')
+          router.replace('/dashboard/teacher')
           return
         }
         router.replace('/dashboard')

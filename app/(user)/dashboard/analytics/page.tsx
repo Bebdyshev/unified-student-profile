@@ -222,7 +222,7 @@ export default function AnalyticsPage() {
           setUser(userData);
           if (userData.type !== 'admin' && userData.type !== 'curator' && userData.type !== 'teacher') {
             toast.error('Доступ запрещен');
-            router.push('/teacher/dashboard');
+            router.push('/dashboard/teacher');
           }
         } catch (error) {
           router.push('/signin');
