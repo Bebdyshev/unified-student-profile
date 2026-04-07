@@ -108,18 +108,48 @@ export default function TeacherSubjectGroupsPage() {
         }
         assignmentsData = rows
       } else {
-        // Teacher: load own groups + own assignments
-        const [g, a] = await Promise.all([
+        // Teacher: load own groups + own assignments + all grades (for 11-12 anchor)
+        const [g, a, allGrades] = await Promise.all([
           api.getMySubjectGroups(),
-          api.getMyTeacherAssignments()
+          api.getMyTeacherAssignments(),
+          api.getAllGrades()
         ])
         setGroups(g)
-        assignmentsData = (a as TeacherAssignmentRow[]).map((x) => ({
+
+        // Start with real assignments
+        const realAssignments = (a as TeacherAssignmentRow[]).map((x) => ({
           subject_id: x.subject_id,
           subject_name: x.subject_name,
           grade_id: x.grade_id,
           grade_name: x.grade_name
         }))
+
+        // Get unique subjects the teacher teaches
+        const teacherSubjects = new Map<number, string>()
+        for (const row of realAssignments) {
+          teacherSubjects.set(row.subject_id, row.subject_name)
+        }
+
+        // Find all 11-12 grades
+        const grades1112 = allGrades.filter((grade: any) => {
+          const p = parallelFromGradeLabel(`${grade.grade}${grade.parallel}`)
+          return p !== null
+        })
+
+        // Build synthetic rows: each teacher subject x each 11-12 grade
+        // This ensures subjects show up even if teacher only has grade-less assignments
+        const rows: TeacherAssignmentRow[] = []
+        for (const [sid, sname] of teacherSubjects) {
+          for (const grade of grades1112) {
+            rows.push({
+              subject_id: sid,
+              subject_name: sname,
+              grade_id: grade.id,
+              grade_name: `${grade.grade}${grade.parallel}`
+            })
+          }
+        }
+        assignmentsData = rows
       }
 
       setAssignments(assignmentsData)
