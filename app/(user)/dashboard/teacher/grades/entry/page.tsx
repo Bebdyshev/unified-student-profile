@@ -1,12 +1,9 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import PageContainer from '@/components/layout/page-container';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'react-toastify';
 import {
@@ -16,11 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Save, ArrowLeft, Upload } from 'lucide-react';
+import { Save, ArrowLeft, Upload, Users, BookOpen, CheckCircle2, AlertTriangle, Keyboard } from 'lucide-react';
 import { handleApiError } from '@/utils/errorHandler';
 import api from '@/lib/api';
 import Link from 'next/link';
 import { UploadScores } from '@/app/(user)/dashboard/classes/_components/upload-scores';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface TeacherAssignment {
   id: number;
@@ -53,6 +51,32 @@ interface ScoreEdit {
   isDirty: boolean;
 }
 
+const QUARTERS = [
+  { key: 'q1', label: '1 чт', full: '1 четверть' },
+  { key: 'q2', label: '2 чт', full: '2 четверть' },
+  { key: 'q3', label: '3 чт', full: '3 четверть' },
+  { key: 'q4', label: '4 чт', full: '4 четверть' },
+];
+
+function getScoreColor(value: number): string {
+  if (!value || value === 0) return '';
+  if (value >= 80) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+  if (value >= 60) return 'text-amber-700 bg-amber-50 border-amber-200';
+  if (value >= 40) return 'text-orange-700 bg-orange-50 border-orange-200';
+  return 'text-red-700 bg-red-50 border-red-200';
+}
+
+function getDangerInfo(level: number | null | undefined) {
+  if (level === null || level === undefined) return null;
+  const map: Record<number, { bg: string; text: string; label: string; dot: string }> = {
+    0: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Низкий', dot: 'bg-emerald-500' },
+    1: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Умеренный', dot: 'bg-amber-500' },
+    2: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Высокий', dot: 'bg-orange-500' },
+    3: { bg: 'bg-red-50', text: 'text-red-700', label: 'Критический', dot: 'bg-red-500' },
+  };
+  return map[level] || map[0];
+}
+
 function TeacherGradeEntryContent() {
   const searchParams = useSearchParams();
   const initialSubjectId = searchParams.get('subject');
@@ -65,12 +89,16 @@ function TeacherGradeEntryContent() {
   const [scoreEdits, setScoreEdits] = useState<Record<number, ScoreEdit>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Track focused cell for keyboard navigation (setter used in handlers)
+  const [, setFocusedCell] = useState<{ row: number; col: number } | null>(null);
 
-  // Get unique subjects and grades from assignments
+  const tableRef = useRef<HTMLDivElement>(null);
+  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
   const subjects = Array.from(
     new Map(assignments.map(a => [a.subject_id, { id: a.subject_id, name: a.subject_name }])).values()
   );
-  
+
   const availableGrades = assignments
     .filter(a => !selectedSubjectId || a.subject_id === Number(selectedSubjectId))
     .filter(a => a.grade_id !== null)
@@ -92,8 +120,6 @@ function TeacherGradeEntryContent() {
       setLoading(true);
       const data = await api.getMyTeacherAssignments();
       setAssignments(data);
-      
-      // Auto-select if only one option
       if (data.length === 1) {
         setSelectedSubjectId(String(data[0].subject_id));
         if (data[0].grade_id) {
@@ -110,15 +136,12 @@ function TeacherGradeEntryContent() {
 
   const fetchStudents = async () => {
     if (!selectedSubjectId || !selectedGradeId) return;
-    
     try {
       setLoading(true);
-      // Get students for the selected subject and grade
       const subject = subjects.find(s => s.id === Number(selectedSubjectId));
       const data = await api.getStudentsByGrade(Number(selectedGradeId), subject?.name);
       setStudents(data);
-      
-      // Initialize score edits
+
       const edits: Record<number, ScoreEdit> = {};
       data.forEach((student: Student) => {
         const actualScores = student.actual_scores || [];
@@ -146,22 +169,61 @@ function TeacherGradeEntryContent() {
 
   const handleScoreChange = (studentId: number, quarter: string, value: string) => {
     const numValue = value === '' ? 0 : parseFloat(value);
+    const clamped = Math.min(100, Math.max(0, isNaN(numValue) ? 0 : numValue));
     setScoreEdits(prev => ({
       ...prev,
       [studentId]: {
         ...prev[studentId],
         scores: {
           ...prev[studentId].scores,
-          [quarter]: isNaN(numValue) ? 0 : numValue
+          [quarter]: clamped
         },
         isDirty: true
       }
     }));
   };
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, rowIndex: number, colIndex: number) => {
+    let nextRow = rowIndex;
+    let nextCol = colIndex;
+
+    if (e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey)) {
+      e.preventDefault();
+      nextRow = Math.min(students.length - 1, rowIndex + 1);
+    } else if (e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey)) {
+      e.preventDefault();
+      nextRow = Math.max(0, rowIndex - 1);
+    } else if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      if (colIndex < 3) {
+        nextCol = colIndex + 1;
+      } else {
+        nextCol = 0;
+        nextRow = Math.min(students.length - 1, rowIndex + 1);
+      }
+    } else if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      if (colIndex > 0) {
+        nextCol = colIndex - 1;
+      } else {
+        nextCol = 3;
+        nextRow = Math.max(0, rowIndex - 1);
+      }
+    } else {
+      return;
+    }
+
+    const key = `${nextRow}-${nextCol}`;
+    const input = inputRefs.current.get(key);
+    if (input) {
+      input.focus();
+      input.select();
+      setFocusedCell({ row: nextRow, col: nextCol });
+    }
+  }, [students.length]);
+
   const handleSaveAll = async () => {
     const dirtyEdits = Object.values(scoreEdits).filter(e => e.isDirty);
-    
     if (dirtyEdits.length === 0) {
       toast.info('Нет изменений для сохранения');
       return;
@@ -174,26 +236,14 @@ function TeacherGradeEntryContent() {
     for (const edit of dirtyEdits) {
       try {
         if (edit.scoreId) {
-          // Update existing score
-          await api.updateScore(edit.scoreId, {
-            actual_scores: edit.scores
-          });
+          await api.updateScore(edit.scoreId, { actual_scores: edit.scores });
         } else {
-          // Create new score
           const subject = subjects.find(s => s.id === Number(selectedSubjectId));
           if (subject) {
-            const result = await api.createScore(
-              edit.studentId,
-              subject.id,
-              edit.scores
-            );
-            // Update scoreId in state
+            const result = await api.createScore(edit.studentId, subject.id, edit.scores);
             setScoreEdits(prev => ({
               ...prev,
-              [edit.studentId]: {
-                ...prev[edit.studentId],
-                scoreId: result.score.id
-              }
+              [edit.studentId]: { ...prev[edit.studentId], scoreId: result.score.id }
             }));
           }
         }
@@ -205,14 +255,13 @@ function TeacherGradeEntryContent() {
     }
 
     setSaving(false);
-    
+
     if (errorCount > 0) {
-      toast.warning(`Сохранено ${savedCount} из ${dirtyEdits.length} записей. Ошибок: ${errorCount}`);
+      toast.warning(`Сохранено ${savedCount} из ${dirtyEdits.length}. Ошибок: ${errorCount}`);
     } else {
-      toast.success(`Все оценки успешно сохранены (${savedCount} записей)`);
+      toast.success(`Сохранено ${savedCount} записей`);
     }
 
-    // Mark all as not dirty
     setScoreEdits(prev => {
       const updated = { ...prev };
       Object.keys(updated).forEach(key => {
@@ -221,195 +270,303 @@ function TeacherGradeEntryContent() {
       return updated;
     });
 
-    // Refresh data
     fetchStudents();
   };
 
-  const getDangerBadge = (level: number | null | undefined) => {
-    if (level === null || level === undefined) return null;
-    
-    const variants: Record<number, { className: string; label: string }> = {
-      0: { className: 'bg-green-100 text-green-800', label: 'Низкий' },
-      1: { className: 'bg-yellow-100 text-yellow-800', label: 'Умеренный' },
-      2: { className: 'bg-orange-100 text-orange-800', label: 'Высокий' },
-      3: { className: 'bg-red-100 text-red-800', label: 'Критический' }
-    };
-    
-    const variant = variants[level] || variants[0];
-    return <Badge className={variant.className}>{variant.label}</Badge>;
+  const getStudentAverage = (studentId: number): number => {
+    const edit = scoreEdits[studentId];
+    if (!edit) return 0;
+    const values = QUARTERS.map(q => edit.scores[q.key] || 0).filter(v => v > 0);
+    if (values.length === 0) return 0;
+    return Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
   };
 
   const dirtyCount = Object.values(scoreEdits).filter(e => e.isDirty).length;
+  const selectedSubject = subjects.find(s => s.id === Number(selectedSubjectId));
+  const selectedGrade = availableGrades.find(g => g.id === Number(selectedGradeId));
 
   if (loading && assignments.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-lg">Загрузка...</div>
+        <div className="animate-pulse flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <span className="text-sm text-muted-foreground">Загрузка...</span>
+        </div>
       </div>
     );
   }
 
   return (
     <PageContainer scrollable>
-      <div className="space-y-6">
+      <div className="space-y-4">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link href="/dashboard/teacher">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold">Ввод оценок</h1>
-              <p className="text-gray-500">Введите оценки для ваших студентов</p>
+              <h1 className="text-xl font-semibold tracking-tight">Ввод оценок</h1>
+              <p className="text-sm text-muted-foreground">
+                {selectedSubject && selectedGrade
+                  ? `${selectedSubject.name} — ${selectedGrade.name}`
+                  : 'Выберите предмет и класс'}
+              </p>
             </div>
           </div>
           <UploadScores
             onUploadComplete={() => {
               fetchAssignments();
-              if (selectedSubjectId && selectedGradeId) {
-                fetchStudents();
-              }
+              if (selectedSubjectId && selectedGradeId) fetchStudents();
             }}
             trigger={
-              <Button variant="outline" className="gap-2">
-                <Upload className="h-4 w-4" />
-                Загрузить Excel
+              <Button variant="outline" size="sm" className="gap-2">
+                <Upload className="h-3.5 w-3.5" />
+                Excel
               </Button>
             }
           />
         </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Выберите класс и предмет</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Предмет</Label>
-              <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите предмет" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map(subject => (
-                    <SelectItem key={subject.id} value={String(subject.id)}>
-                      {subject.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Класс</Label>
-              <Select 
-                value={selectedGradeId} 
-                onValueChange={setSelectedGradeId}
-                disabled={!selectedSubjectId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите класс" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableGrades.map(grade => (
-                    <SelectItem key={grade.id} value={String(grade.id)}>
-                      {grade.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Inline filters */}
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+          <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Select value={selectedSubjectId} onValueChange={(v) => { setSelectedSubjectId(v); setSelectedGradeId(''); }}>
+            <SelectTrigger className="w-[220px] h-9 bg-background">
+              <SelectValue placeholder="Предмет" />
+            </SelectTrigger>
+            <SelectContent>
+              {subjects.map(s => (
+                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-      {/* Students Table */}
-      {selectedSubjectId && selectedGradeId && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Оценки студентов</CardTitle>
-              <CardDescription>
-                {students.length} студентов • {dirtyCount > 0 ? `${dirtyCount} изменений не сохранено` : 'Все изменения сохранены'}
-              </CardDescription>
+          <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Select value={selectedGradeId} onValueChange={setSelectedGradeId} disabled={!selectedSubjectId}>
+            <SelectTrigger className="w-[140px] h-9 bg-background">
+              <SelectValue placeholder="Класс" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableGrades.map(g => (
+                <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex-1" />
+
+          {selectedSubjectId && selectedGradeId && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Keyboard className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Tab/Enter для навигации</span>
             </div>
-            <Button onClick={handleSaveAll} disabled={saving || dirtyCount === 0}>
-              <Save className="mr-2 h-4 w-4" />
-              {saving ? 'Сохранение...' : 'Сохранить все'}
-            </Button>
-          </CardHeader>
-          <CardContent>
+          )}
+        </div>
+
+        {/* Table */}
+        {selectedSubjectId && selectedGradeId && (
+          <>
             {loading ? (
-              <div className="text-center py-8">Загрузка студентов...</div>
+              <div className="flex items-center justify-center py-16">
+                <div className="animate-pulse flex flex-col items-center gap-3">
+                  <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                  <span className="text-sm text-muted-foreground">Загрузка студентов...</span>
+                </div>
+              </div>
             ) : students.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Студенты не найдены для выбранного класса и предмета.
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <Users className="h-10 w-10 mb-3 opacity-30" />
+                <p className="text-sm">Студенты не найдены</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100 text-left">
-                      <th className="p-3 border-b border-gray-200 font-semibold text-sm">Студент</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">1 четверть</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">2 четверть</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">3 четверть</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">4 четверть</th>
-                      <th className="p-3 border-b border-gray-200 font-semibold text-sm text-center">Риск</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map(student => {
-                      const edit = scoreEdits[student.id];
-                      return (
-                        <tr 
-                          key={student.id} 
-                          className={`hover:bg-gray-50 ${edit?.isDirty ? 'bg-yellow-50' : ''}`}
-                        >
-                          <td className="p-3 border-b border-gray-200">
-                            <div className="font-medium">{student.name}</div>
-                            <div className="text-sm text-gray-500">{student.email || ''}</div>
-                          </td>
-                          {['q1', 'q2', 'q3', 'q4'].map(quarter => (
-                            <td key={quarter} className="p-3 border-b border-gray-200">
-                              <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.1"
-                                className="w-20 text-center mx-auto"
-                                value={edit?.scores[quarter] || ''}
-                                onChange={(e) => handleScoreChange(student.id, quarter, e.target.value)}
-                                placeholder="0"
-                              />
+              <div ref={tableRef} className="rounded-lg border bg-card overflow-hidden">
+                {/* Table header info */}
+                <div className="flex items-center justify-between px-4 py-2.5 bg-muted/30 border-b">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium">{students.length} учеников</span>
+                    {dirtyCount > 0 && (
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                        {dirtyCount} не сохранено
+                      </Badge>
+                    )}
+                    {dirtyCount === 0 && students.length > 0 && (
+                      <span className="flex items-center gap-1 text-xs text-emerald-600">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Все сохранено
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    onClick={handleSaveAll}
+                    disabled={saving || dirtyCount === 0}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {saving ? (
+                      <>
+                        <div className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        Сохранение...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-3.5 w-3.5" />
+                        Сохранить
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Spreadsheet table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-muted/40">
+                        <th className="w-10 px-3 py-2.5 text-xs font-medium text-muted-foreground text-center border-r">#</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-muted-foreground text-left min-w-[200px]">Ученик</th>
+                        {QUARTERS.map(q => (
+                          <TooltipProvider key={q.key}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <th className="w-[90px] px-2 py-2.5 text-xs font-medium text-muted-foreground text-center">{q.label}</th>
+                              </TooltipTrigger>
+                              <TooltipContent><p>{q.full}</p></TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ))}
+                        <th className="w-[70px] px-2 py-2.5 text-xs font-medium text-muted-foreground text-center">Средн.</th>
+                        <th className="w-[100px] px-2 py-2.5 text-xs font-medium text-muted-foreground text-center">Риск</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {students.map((student, rowIndex) => {
+                        const edit = scoreEdits[student.id];
+                        const avg = getStudentAverage(student.id);
+                        const danger = getDangerInfo(student.danger_level);
+
+                        return (
+                          <tr
+                            key={student.id}
+                            className={`
+                              group transition-colors border-t
+                              ${edit?.isDirty ? 'bg-amber-50/50' : 'hover:bg-muted/30'}
+                              ${rowIndex % 2 === 0 ? '' : 'bg-muted/10'}
+                            `}
+                          >
+                            {/* Row number */}
+                            <td className="px-3 py-1.5 text-xs text-muted-foreground text-center border-r tabular-nums">
+                              {rowIndex + 1}
                             </td>
-                          ))}
-                          <td className="p-3 border-b border-gray-200 text-center">
-                            {getDangerBadge(student.danger_level)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+
+                            {/* Student name */}
+                            <td className="px-4 py-1.5">
+                              <span className="text-sm font-medium">{student.name}</span>
+                            </td>
+
+                            {/* Quarter scores */}
+                            {QUARTERS.map((q, colIndex) => {
+                              const val = edit?.scores[q.key] || 0;
+                              const colorClass = getScoreColor(val);
+                              return (
+                                <td key={q.key} className="px-1.5 py-1">
+                                  <input
+                                    ref={(el) => {
+                                      if (el) inputRefs.current.set(`${rowIndex}-${colIndex}`, el);
+                                    }}
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    className={`
+                                      w-full h-8 text-center text-sm font-medium rounded-md border outline-none
+                                      transition-all duration-150
+                                      focus:ring-2 focus:ring-primary/30 focus:border-primary
+                                      ${val > 0 ? colorClass : 'bg-background border-input text-foreground'}
+                                    `}
+                                    value={val || ''}
+                                    onChange={(e) => handleScoreChange(student.id, q.key, e.target.value)}
+                                    onFocus={(e) => {
+                                      e.target.select();
+                                      setFocusedCell({ row: rowIndex, col: colIndex });
+                                    }}
+                                    onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                                    placeholder="-"
+                                  />
+                                </td>
+                              );
+                            })}
+
+                            {/* Average */}
+                            <td className="px-2 py-1.5 text-center">
+                              {avg > 0 ? (
+                                <span className={`text-sm font-semibold tabular-nums ${
+                                  avg >= 80 ? 'text-emerald-600' :
+                                  avg >= 60 ? 'text-amber-600' :
+                                  avg >= 40 ? 'text-orange-600' :
+                                  'text-red-600'
+                                }`}>
+                                  {avg}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </td>
+
+                            {/* Danger level */}
+                            <td className="px-2 py-1.5 text-center">
+                              {danger ? (
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${danger.bg} ${danger.text}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${danger.dot}`} />
+                                  {danger.label}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Bottom save bar (visible when there are unsaved changes) */}
+                {dirtyCount > 0 && (
+                  <div className="sticky bottom-0 flex items-center justify-between px-4 py-3 bg-amber-50 border-t border-amber-200">
+                    <div className="flex items-center gap-2 text-sm text-amber-800">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>{dirtyCount} {dirtyCount === 1 ? 'изменение' : dirtyCount < 5 ? 'изменения' : 'изменений'} не сохранено</span>
+                    </div>
+                    <Button onClick={handleSaveAll} disabled={saving} size="sm" className="gap-2">
+                      <Save className="h-3.5 w-3.5" />
+                      {saving ? 'Сохранение...' : 'Сохранить все'}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </>
+        )}
 
-      {assignments.length === 0 && !loading && (
-        <Card>
-          <CardContent className="py-8 text-center text-gray-500">
-            У вас нет назначенных классов или предметов.
-            <br />
-            Обратитесь к администратору для получения назначений.
-          </CardContent>
-        </Card>
-      )}
+        {/* Empty state */}
+        {assignments.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <BookOpen className="h-12 w-12 mb-4 opacity-20" />
+            <p className="text-sm font-medium">Нет назначенных классов</p>
+            <p className="text-xs mt-1">Обратитесь к администратору для получения назначений</p>
+          </div>
+        )}
+
+        {/* No selection prompt */}
+        {assignments.length > 0 && (!selectedSubjectId || !selectedGradeId) && !loading && (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <BookOpen className="h-12 w-12 mb-4 opacity-20" />
+            <p className="text-sm font-medium">Выберите предмет и класс</p>
+            <p className="text-xs mt-1">Используйте фильтры выше для начала работы</p>
+          </div>
+        )}
       </div>
     </PageContainer>
   );
@@ -417,7 +574,14 @@ function TeacherGradeEntryContent() {
 
 export default function TeacherGradeEntryPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><div className="text-lg">Загрузка...</div></div>}>
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-pulse flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <span className="text-sm text-muted-foreground">Загрузка...</span>
+        </div>
+      </div>
+    }>
       <TeacherGradeEntryContent />
     </Suspense>
   );
