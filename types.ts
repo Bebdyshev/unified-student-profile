@@ -205,12 +205,17 @@ export interface User {
   updated_at: string;
   assigned_grades_count?: number;  // For curators
   assignment_count?: number;       // For teachers
+  /** С бэкенда: показывать ли учителю вкладку «Предметные группы» */
+  show_subject_groups_nav?: boolean;
 }
 
 export interface Subject {
   id: number;
   name: string;
   description?: string;
+  applicable_parallels?: number[];
+  /** Разрешены предметные группы 11–12 (настраивается администратором) */
+  allows_subject_groups?: boolean;
   is_active: number;
   created_at: string;
   updated_at: string;

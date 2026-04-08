@@ -34,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
+import { subjectNamesFromAssignments, type TeacherAssignmentRow } from '@/lib/teacher-assignments';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -213,6 +214,8 @@ export default function AnalyticsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalStudents, setModalStudents] = useState<Student[]>([]);
+  const [teacherSubjectNames, setTeacherSubjectNames] = useState<string[]>([]);
+  const [chartTab, setChartTab] = useState('parallels');
 
   useEffect(() => {
     const loadUser = async () => {
@@ -235,10 +238,46 @@ export default function AnalyticsPage() {
   }, [isAuthenticated, authLoading, router]);
 
   useEffect(() => {
+    const loadTeacherSubjects = async () => {
+      if (user?.type !== 'teacher') {
+        setTeacherSubjectNames([]);
+        return;
+      }
+      try {
+        const rows: TeacherAssignmentRow[] = await api.getMyTeacherAssignments();
+        setTeacherSubjectNames(subjectNamesFromAssignments(rows));
+      } catch {
+        setTeacherSubjectNames([]);
+      }
+    };
+    loadTeacherSubjects();
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.type === 'teacher') {
+      setChartTab('quarters');
+    }
+  }, [user?.type]);
+
+  useEffect(() => {
+    if (user?.type !== 'teacher' || teacherSubjectNames.length === 0) return;
+    if (selectedSubject !== 'all' && !teacherSubjectNames.includes(selectedSubject)) {
+      setSelectedSubject('all');
+    }
+  }, [user?.type, teacherSubjectNames, selectedSubject]);
+
+  useEffect(() => {
     if (user && (user.type === 'admin' || user.type === 'curator' || user.type === 'teacher')) {
       fetchData(selectedSubject);
     }
   }, [user, selectedSubject]);
+
+  const subjectFilterOptions = useMemo(() => {
+    if (user?.type === 'teacher' && teacherSubjectNames.length > 0) {
+      return teacherSubjectNames;
+    }
+    return data.subjects;
+  }, [user?.type, teacherSubjectNames, data.subjects]);
 
   const fetchData = async (subject?: string) => {
     setLoading(true);
@@ -703,7 +742,11 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Аналитика</h1>
-            <p className="text-gray-500">Анализ успеваемости и рисков студентов</p>
+            <p className="text-gray-500">
+              {user?.type === 'teacher'
+                ? 'Успеваемость и риски по вашим классам и назначениям'
+                : 'Анализ успеваемости и рисков студентов'}
+            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => fetchData(selectedSubject)}>
@@ -762,7 +805,7 @@ export default function AnalyticsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Все предметы</SelectItem>
-                    {data.subjects.map(s => (
+                    {subjectFilterOptions.map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
                     ))}
                   </SelectContent>
@@ -880,7 +923,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Charts */}
-        <Tabs defaultValue="parallels" className="space-y-4">
+        <Tabs value={chartTab} onValueChange={setChartTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="parallels">По параллелям</TabsTrigger>
             <TabsTrigger value="overview">Обзор</TabsTrigger>

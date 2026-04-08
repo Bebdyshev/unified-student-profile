@@ -1,5 +1,5 @@
 'use client';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import api from '@/lib/api';
 import {
   Collapsible,
@@ -31,7 +31,7 @@ import {
   SidebarRail,
   SidebarTrigger
 } from '@/components/ui/sidebar';
-import { navItems } from '@/constants/data';
+import { navItems, teacherNavItems } from '@/constants/data';
 import {
   ChevronRight,
   ChevronsUpDown,
@@ -45,7 +45,27 @@ import { useEffect, useState } from 'react';
 import { Breadcrumbs } from '../breadcrumbs';
 import { Icons } from '../icons';
 import ThemeToggle from './ThemeToggle/theme-toggle';
-import { UserNav } from './user-nav';
+
+/** Стабильный оттенок 0–359 от строки (сид — имя пользователя) */
+const hueFromSeed = (seed: string): number => {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(31, h) + seed.charCodeAt(i);
+  }
+  return Math.abs(h) % 360;
+};
+
+const initialsFromName = (name: string): string => {
+  const t = name.trim();
+  if (!t) return '?';
+  const parts = t.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0]?.[0] ?? '';
+    const b = parts[parts.length - 1]?.[0] ?? '';
+    return (a + b).toUpperCase();
+  }
+  return t.slice(0, 2).toUpperCase();
+};
 
 export const company = {
   name: 'Acme Inc',
@@ -59,8 +79,14 @@ export default function AppSidebar({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [userInfo, setUserInfo] = useState<{ company_name?: string; name: string; type?: string }>({
-    company_name: "Freedom", 
+  const [userInfo, setUserInfo] = useState<{
+    company_name?: string;
+    name: string;
+    type?: string;
+    id?: number;
+    show_subject_groups_nav?: boolean;
+  }>({
+    company_name: "Freedom",
     name: "Berdyshev Kerey",
     type: "user"
   });
@@ -86,6 +112,20 @@ export default function AppSidebar({
   const [mounted, setMounted] = React.useState(false);
   const pathname = usePathname();
   const isTeacherRoute = pathname?.startsWith('/dashboard/teacher');
+
+  const isNavItemActive = (url: string) => {
+    if (!pathname) return false
+    if (pathname === url) return true
+    if (url === '/dashboard/teacher') return false
+    return pathname.startsWith(`${url}/`)
+  }
+
+  const sidebarNavItems = React.useMemo(() => {
+    if (userInfo?.type === 'teacher') {
+      return teacherNavItems;
+    }
+    return [...navItems, { title: 'Предметы', url: '/dashboard/subjects', icon: 'forms' as const }];
+  }, [userInfo?.type]);
   // Only render after first client-side mount
   React.useEffect(() => {
     setMounted(true);
@@ -113,61 +153,29 @@ export default function AppSidebar({
           <SidebarGroup>
             <SidebarGroupLabel>Функционал</SidebarGroupLabel>
             <SidebarMenu>
-              {[...navItems, { title: 'Предметы', url: '/dashboard/subjects', icon: 'book' as any }]
+              {sidebarNavItems
                 .filter((item) => {
-                  // Filter items based on user type
-                  const navItem = item as any;
-                  const userType = userInfo?.type || 'user';
-                  
-                  // For teachers, show only teacher-specific items and students
+                  const navItem = item as { teacherOnly?: boolean; adminOnly?: boolean }
+                  const userType = userInfo?.type || 'user'
                   if (userType === 'teacher') {
-                    // Show teacher-specific items
-                    if (navItem.teacherOnly) {
-                      return true;
-                    }
-                    // Hide admin-only items
-                    if (navItem.adminOnly || item.url === '/admin/settings') {
-                      return false;
-                    }
-                    // Hide admin/management items for teachers (they have their own dashboard)
-                    if (item.url === '/dashboard' ||
-                        item.url === '/dashboard/classes' || 
-                        item.url === '/dashboard/users' ||
-                        item.url === 'dashboard/users' ||
-                        item.url === '/dashboard/subjects') {
-                      return false;
-                    }
-                    // Allow teacher pages, students and analytics
-                    return true;
+                    return true
                   }
-                  
-                  // For admins, show admin items only (hide teacherOnly)
                   if (userType === 'admin') {
-                    // Hide teacher-specific items from admins
                     if (navItem.teacherOnly) {
-                      return false;
+                      return false
                     }
-                    return true;
+                    return true
                   }
-                  
-                  // For regular users
-                  // If teacherOnly, don't show
                   if (navItem.teacherOnly) {
-                    return false;
+                    return false
                   }
-                  
-                  // If adminOnly, don't show
                   if (navItem.adminOnly) {
-                    return false;
+                    return false
                   }
-                  
-                  // Hide admin settings from non-admins
                   if (item.url === '/admin/settings') {
-                    return false;
+                    return false
                   }
-                  
-                  // Show all other items
-                  return true;
+                  return true
                 })
                 .map((item) => {
                 // Safe icon handling with type checking
@@ -187,7 +195,7 @@ export default function AppSidebar({
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton
                           tooltip={item.title}
-                          isActive={pathname === item.url}
+                          isActive={isNavItemActive(item.url)}
                         >
                           {item.icon && <IconComponent />}
                           <span>{item.title}</span>
@@ -200,7 +208,7 @@ export default function AppSidebar({
                             <SidebarMenuSubItem key={subItem.title}>
                               <SidebarMenuSubButton
                                 asChild
-                                isActive={pathname === subItem.url}
+                                isActive={isNavItemActive(subItem.url)}
                               >
                                 <Link href={subItem.url}>
                                   <span>{subItem.title}</span>
@@ -217,7 +225,7 @@ export default function AppSidebar({
                     <SidebarMenuButton
                       asChild
                       tooltip={item.title}
-                      isActive={pathname === item.url}
+                      isActive={isNavItemActive(item.url)}
                     >
                       <Link href={item.url}>
                         <IconComponent />
@@ -241,12 +249,14 @@ export default function AppSidebar({
                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   >
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarImage
-                        src={''}
-                        alt={''}
-                      />
-                      <AvatarFallback className="rounded-lg">
-                        <img src={"https://avatar.iran.liara.run/username?username=" + userInfo.name} alt={userInfo.name} />
+                      <AvatarFallback
+                        className="rounded-lg text-[11px] font-semibold text-white shadow-inner"
+                        style={{
+                          backgroundColor: `hsl(${hueFromSeed(userInfo.name)} 52% 44%)`,
+                        }}
+                        title={userInfo.name}
+                      >
+                        {initialsFromName(userInfo.name)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">

@@ -13,7 +13,7 @@ import { toast } from 'react-toastify';
 import { useAuth } from '@/hooks/use-auth';
 import api from '@/lib/api';
 import type { Subject } from '@/types';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function SubjectsPage() {
   const router = useRouter();
@@ -26,7 +26,16 @@ export default function SubjectsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [current, setCurrent] = useState<Subject | null>(null);
-  const [form, setForm] = useState<{ name: string; description?: string; applicable_parallels: number[] }>({ name: '', applicable_parallels: Array.from({ length: 6 }, (_, i) => i + 7) });
+  const [form, setForm] = useState<{
+    name: string;
+    description?: string;
+    applicable_parallels: number[];
+    allows_subject_groups: boolean;
+  }>({
+    name: '',
+    applicable_parallels: Array.from({ length: 6 }, (_, i) => i + 7),
+    allows_subject_groups: false
+  });
 
   // Check user authentication and authorization
   useEffect(() => {
@@ -75,14 +84,24 @@ export default function SubjectsPage() {
   };
 
   const openCreate = () => {
-    setForm({ name: '', description: '', applicable_parallels: Array.from({ length: 6 }, (_, i) => i + 7) });
+    setForm({
+      name: '',
+      description: '',
+      applicable_parallels: Array.from({ length: 6 }, (_, i) => i + 7),
+      allows_subject_groups: false
+    });
     setIsCreateOpen(true);
   };
 
   const createSubject = async () => {
     if (!form.name.trim()) return;
     try {
-      await api.createSubject({ name: form.name.trim(), description: form.description, applicable_parallels: form.applicable_parallels } as any);
+      await api.createSubject({
+        name: form.name.trim(),
+        description: form.description,
+        applicable_parallels: form.applicable_parallels,
+        allows_subject_groups: form.allows_subject_groups
+      });
       setIsCreateOpen(false);
       await fetchSubjects();
     } catch (e) {
@@ -92,14 +111,24 @@ export default function SubjectsPage() {
 
   const openEdit = (s: Subject) => {
     setCurrent(s);
-    setForm({ name: s.name, description: s.description || '', applicable_parallels: (s as any).applicable_parallels || [] });
+    setForm({
+      name: s.name,
+      description: s.description || '',
+      applicable_parallels: s.applicable_parallels || [],
+      allows_subject_groups: s.allows_subject_groups ?? false
+    });
     setIsEditOpen(true);
   };
 
   const saveEdit = async () => {
     if (!current) return;
     try {
-      await api.updateSubject(current.id, { name: form.name, description: form.description, applicable_parallels: form.applicable_parallels } as any);
+      await api.updateSubject(current.id, {
+        name: form.name,
+        description: form.description,
+        applicable_parallels: form.applicable_parallels,
+        allows_subject_groups: form.allows_subject_groups
+      });
       setIsEditOpen(false);
       setCurrent(null);
       await fetchSubjects();
@@ -175,9 +204,12 @@ export default function SubjectsPage() {
                         <td className="p-3 border-b border-gray-200 font-medium">{s.name}</td>
                         <td className="p-3 border-b border-gray-200 text-sm text-muted-foreground">
                           {s.description || '-'}
-                          {Array.isArray((s as any).applicable_parallels) && (s as any).applicable_parallels.length > 0 && (
-                            <div className="mt-1 text-xs">Параллели: {(s as any).applicable_parallels.join(', ')}</div>
+                          {Array.isArray(s.applicable_parallels) && s.applicable_parallels.length > 0 && (
+                            <div className="mt-1 text-xs">Параллели: {s.applicable_parallels.join(', ')}</div>
                           )}
+                          {s.allows_subject_groups ? (
+                            <div className="mt-1 text-xs text-primary font-medium">Предметные группы 11–12: да</div>
+                          ) : null}
                         </td>
                         <td className="p-3 border-b border-gray-200 text-right space-x-2">
                           <Button variant="outline" size="icon" onClick={() => openEdit(s)} className="h-8 w-8" title="Редактировать">
@@ -235,6 +267,17 @@ export default function SubjectsPage() {
                   })}
                 </div>
               </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="subj-sg"
+                  checked={form.allows_subject_groups}
+                  onCheckedChange={(v) => setForm((p) => ({ ...p, allows_subject_groups: v === true }))}
+                  aria-label="Предметные группы для 11–12 классов"
+                />
+                <Label htmlFor="subj-sg" className="text-sm font-normal leading-snug cursor-pointer">
+                  Предметные группы (11–12 класс)
+                </Label>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Отмена</Button>
@@ -281,6 +324,17 @@ export default function SubjectsPage() {
                     );
                   })}
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-subj-sg"
+                  checked={form.allows_subject_groups}
+                  onCheckedChange={(v) => setForm((p) => ({ ...p, allows_subject_groups: v === true }))}
+                  aria-label="Предметные группы для 11–12 классов"
+                />
+                <Label htmlFor="edit-subj-sg" className="text-sm font-normal leading-snug cursor-pointer">
+                  Предметные группы (11–12 класс)
+                </Label>
               </div>
             </div>
             <DialogFooter>

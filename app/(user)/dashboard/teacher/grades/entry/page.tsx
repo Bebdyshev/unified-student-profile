@@ -105,26 +105,22 @@ function TeacherGradeEntryContent() {
     .map(a => ({ id: a.grade_id!, name: a.grade_name! }))
     .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
 
-  useEffect(() => {
-    fetchAssignments();
-  }, []);
-
-  useEffect(() => {
-    if (selectedSubjectId && selectedGradeId) {
-      fetchStudents();
-    }
-  }, [selectedSubjectId, selectedGradeId]);
-
   const fetchAssignments = async () => {
     try {
       setLoading(true);
       const data = await api.getMyTeacherAssignments();
       setAssignments(data);
-      if (data.length === 1) {
+      const subFromUrl = searchParams.get('subject');
+      const gradeFromUrl = searchParams.get('grade');
+      if (subFromUrl) {
+        setSelectedSubjectId(subFromUrl);
+      } else if (data.length === 1) {
         setSelectedSubjectId(String(data[0].subject_id));
-        if (data[0].grade_id) {
-          setSelectedGradeId(String(data[0].grade_id));
-        }
+      }
+      if (gradeFromUrl) {
+        setSelectedGradeId(gradeFromUrl);
+      } else if (data.length === 1 && data[0].grade_id) {
+        setSelectedGradeId(String(data[0].grade_id));
       }
     } catch (err) {
       const apiError = handleApiError(err);
@@ -166,6 +162,18 @@ function TeacherGradeEntryContent() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAssignments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- синхронизируем выбор с query при смене URL
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (selectedSubjectId && selectedGradeId) {
+      fetchStudents();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSubjectId, selectedGradeId]);
 
   const handleScoreChange = (studentId: number, quarter: string, value: string) => {
     const numValue = value === '' ? 0 : parseFloat(value);
@@ -317,6 +325,16 @@ function TeacherGradeEntryContent() {
             </div>
           </div>
           <UploadScores
+            initialSubjectId={
+              selectedSubjectId && !Number.isNaN(Number(selectedSubjectId))
+                ? Number(selectedSubjectId)
+                : undefined
+            }
+            initialGradeId={
+              selectedGradeId && !Number.isNaN(Number(selectedGradeId))
+                ? Number(selectedGradeId)
+                : undefined
+            }
             onUploadComplete={() => {
               fetchAssignments();
               if (selectedSubjectId && selectedGradeId) fetchStudents();
@@ -324,7 +342,7 @@ function TeacherGradeEntryContent() {
             trigger={
               <Button variant="outline" size="sm" className="gap-2">
                 <Upload className="h-3.5 w-3.5" />
-                Excel
+                Загрузка из Excel
               </Button>
             }
           />

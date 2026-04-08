@@ -75,6 +75,7 @@ export interface User {
   name: string;
   email: string;
   type: string;
+  show_subject_groups_nav?: boolean;
 }
 
 export interface CreateUserRequest {
@@ -324,6 +325,15 @@ export interface AvailableClassesResponse {
   grades: number[];
 }
 
+export interface AdvanceAcademicYearResponse {
+  dry_run: boolean;
+  previous_academic_year: string;
+  new_academic_year: string;
+  promoted: number;
+  graduated_unchanged: number;
+  issues: Record<string, unknown>[];
+}
+
 // ==================== API SERVICE CLASS ====================
 
 class ApiService {
@@ -459,9 +469,11 @@ class ApiService {
     }
   }
 
-  async getAllGrades(): Promise<any[]> {
+  async getAllGrades(params?: { purpose?: 'subject_group_anchors' }): Promise<any[]> {
     try {
-      const response: AxiosResponse<any[]> = await apiClient.get('/grades/all/');
+      const response: AxiosResponse<any[]> = await apiClient.get('/grades/all/', {
+        params: params?.purpose ? { purpose: params.purpose } : undefined,
+      });
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -855,6 +867,31 @@ class ApiService {
       return response.data;
     } catch (error) {
       throw handleApiError(error);
+    }
+  }
+
+  async advanceAcademicYear(dryRun: boolean = false): Promise<AdvanceAcademicYearResponse> {
+    try {
+      const response = await apiClient.post<AdvanceAcademicYearResponse>(
+        '/settings/advance-academic-year',
+        {},
+        { params: { dry_run: dryRun } }
+      )
+      return response.data
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const raw = error.response?.data?.detail
+        if (raw && typeof raw === 'object' && raw !== null && 'message' in raw) {
+          const err = new Error(String((raw as { message: string }).message)) as Error & {
+            issues?: Record<string, unknown>[]
+            status?: number
+          }
+          err.issues = (raw as { issues?: Record<string, unknown>[] }).issues
+          err.status = error.response?.status
+          throw err
+        }
+      }
+      throw handleApiError(error)
     }
   }
 
@@ -1321,7 +1358,12 @@ class ApiService {
     }
   }
 
-  async createSubject(subjectData: { name: string; description?: string; applicable_parallels?: number[] }): Promise<{ id: number; message: string }> {
+  async createSubject(subjectData: {
+    name: string;
+    description?: string;
+    applicable_parallels?: number[];
+    allows_subject_groups?: boolean;
+  }): Promise<{ id: number; message: string }> {
     try {
       const response = await apiClient.post('/subjects/', subjectData);
       return response.data;
@@ -1330,7 +1372,16 @@ class ApiService {
     }
   }
 
-  async updateSubject(subjectId: number, subjectData: { name?: string; description?: string; is_active?: number; applicable_parallels?: number[] }): Promise<{ message: string }> {
+  async updateSubject(
+    subjectId: number,
+    subjectData: {
+      name?: string;
+      description?: string;
+      is_active?: number;
+      applicable_parallels?: number[];
+      allows_subject_groups?: boolean;
+    }
+  ): Promise<{ message: string }> {
     try {
       const response = await apiClient.put(`/subjects/${subjectId}`, subjectData);
       return response.data;

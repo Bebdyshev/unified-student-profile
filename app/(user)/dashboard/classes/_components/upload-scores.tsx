@@ -11,7 +11,12 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Upload, Download, FileText, AlertCircle, CheckCircle, Info, X } from 'lucide-react';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from '@/components/ui/collapsible';
+import { Upload, Download, FileText, AlertCircle, CheckCircle, Info, X, ChevronDown } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
 import type { Grade, Subject, Subgroup, SubjectGroup, ExcelUploadResponse } from '@/types';
@@ -19,6 +24,12 @@ import type { Grade, Subject, Subgroup, SubjectGroup, ExcelUploadResponse } from
 interface UploadScoresProps {
   onUploadComplete?: () => void;
   trigger?: React.ReactNode;
+  /** When set with onOpenChange, dialog is controlled (e.g. open from parent without trigger) */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  initialGradeId?: number;
+  initialSubjectId?: number;
+  initialSemester?: number;
 }
 
 interface UploadFormData {
@@ -45,8 +56,25 @@ const DANGER_LEVEL_NAMES = {
   3: 'Критический'
 };
 
-export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function UploadScores({
+  onUploadComplete,
+  trigger,
+  open: openControlled,
+  onOpenChange,
+  initialGradeId,
+  initialSubjectId,
+  initialSemester
+}: UploadScoresProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = openControlled !== undefined;
+  const dialogOpen = isControlled ? openControlled : internalOpen;
+  const handleDialogOpenChange = (next: boolean) => {
+    if (isControlled) {
+      onOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -107,10 +135,21 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
 
   // Load initial data
   useEffect(() => {
-    if (isOpen) {
+    if (dialogOpen) {
       loadInitialData();
     }
-  }, [isOpen]);
+  }, [dialogOpen]);
+
+  /** Подставляем класс/предмет с родителя после загрузки справочников — иначе селекты пустые */
+  useEffect(() => {
+    if (!dialogOpen || loading) return;
+    setFormData((prev) => ({
+      ...prev,
+      ...(initialGradeId != null && initialGradeId > 0 ? { grade_id: initialGradeId } : {}),
+      ...(initialSubjectId != null && initialSubjectId > 0 ? { subject_id: initialSubjectId } : {}),
+      ...(initialSemester != null ? { semester: initialSemester } : {})
+    }));
+  }, [dialogOpen, loading, initialGradeId, initialSubjectId, initialSemester]);
 
   // Load subgroups when grade changes
   useEffect(() => {
@@ -331,10 +370,12 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   };
 
   const resetForm = () => {
+    const teacherName =
+      userType === 'teacher' && currentUser?.name ? String(currentUser.name) : '';
     setFormData({
       grade_id: 0,
       subject_id: 0,
-      teacher_name: '',
+      teacher_name: teacherName,
       semester: 1,
       subgroup_id: undefined,
       subject_group_id: undefined,
@@ -342,8 +383,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
     });
     setUploadResult(null);
     setUploadProgress(0);
-    
-    // Reset file input
+
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
@@ -352,25 +392,36 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
 
   const handleClose = () => {
     if (!isUploading) {
-      setIsOpen(false);
+      resetForm();
+      handleDialogOpenChange(false);
+    }
+  };
+
+  const onDialogOpenChange = (next: boolean) => {
+    if (!next && !isUploading) {
       resetForm();
     }
+    handleDialogOpenChange(next);
   };
 
   const selectedGrade = grades.find(g => g.id === formData.grade_id);
   const selectedSubject = subjects.find(s => s.id === formData.subject_id);
 
+  const showTrigger = !isControlled || trigger !== undefined;
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
-            Загрузить оценки
-          </Button>
-        )}
-      </DialogTrigger>
-      
+    <Dialog open={dialogOpen} onOpenChange={onDialogOpenChange}>
+      {showTrigger ? (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Загрузить оценки
+            </Button>
+          )}
+        </DialogTrigger>
+      ) : null}
+
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -378,7 +429,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
             Загрузка оценок из Excel
           </DialogTitle>
           <DialogDescription>
-            Загрузите Excel файл с оценками студентов. Система автоматически рассчитает predicted score и уровень опасности.
+            Загрузите Excel файл с оценками студентов. Система рассчитает прогноз и уровень риска по успеваемости.
           </DialogDescription>
         </DialogHeader>
 
@@ -388,6 +439,31 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
           </div>
         ) : (
           <div className="space-y-6">
+            <Collapsible className="rounded-lg border bg-muted/40 px-3 py-2">
+              <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium [&[data-state=open]_svg]:rotate-180">
+                <span>Подробная инструкция (нажмите, чтобы развернуть)</span>
+                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3 text-sm text-muted-foreground space-y-3 data-[state=closed]:animate-out">
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>Скачайте шаблон Excel кнопкой ниже — в нём нужные названия колонок.</li>
+                  <li>
+                    Заполните строки: ФИО ученика, класс (как в системе), оценки по четвертям (Q1–Q4) и
+                    при необходимости колонку учителя — без лишних пробелов в числах.
+                  </li>
+                  <li>В форме выберите тот же класс, предмет и четверть, что и в файле.</li>
+                  <li>
+                    Для 11–12 классов при необходимости укажите подгруппу или предметную группу — как в вашем
+                    назначении.
+                  </li>
+                  <li>Прикрепите сохранённый .xlsx или .xls и нажмите «Загрузить».</li>
+                </ol>
+                <p className="text-xs border-t pt-2">
+                  Типичные ошибки: другой формат класса, неверный предмет, пустые обязательные ячейки, файл не Excel.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+
             {/* Template Download */}
             <Card>
               <CardHeader className="pb-3">

@@ -26,11 +26,20 @@ import {
   AlertCircle,
   Check,
   BarChart3,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ArrowRightCircle
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useSystemSettings } from '@/hooks/use-system-settings';
 import api from '@/lib/api';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function SystemSettingsPage() {
   const router = useRouter();
@@ -48,6 +57,10 @@ export default function SystemSettingsPage() {
   
   const [newLetter, setNewLetter] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const [advanceConfirmOpen, setAdvanceConfirmOpen] = useState(false);
+  const [advanceChecking, setAdvanceChecking] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
   
   // Prediction weights state
   const [predictionWeights, setPredictionWeights] = useState({
@@ -216,6 +229,46 @@ export default function SystemSettingsPage() {
   const calculateTotalClasses = () => {
     const gradeCount = formData.max_grade - formData.min_grade + 1;
     return gradeCount * formData.class_letters.length;
+  };
+
+  const handleAdvanceDryRun = async () => {
+    setAdvanceChecking(true);
+    try {
+      const r = await api.advanceAcademicYear(true);
+      if (r.issues.length > 0) {
+        toast.warning(
+          `Проверка: ${r.issues.length} проблем (нет следующего класса, ошибка данных и т.д.). Исправьте и повторите.`
+        );
+      } else {
+        toast.success(
+          `Проверка ОК: будет переведено учеников: ${r.promoted}, без смены класса (11–12 кл.): ${r.graduated_unchanged}. Год: ${r.previous_academic_year} → ${r.new_academic_year}`
+        );
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e?.message || 'Не удалось выполнить проверку');
+    } finally {
+      setAdvanceChecking(false);
+    }
+  };
+
+  const handleAdvanceExecute = async () => {
+    setAdvancing(true);
+    try {
+      const r = await api.advanceAcademicYear(false);
+      toast.success(
+        `Учебный год обновлён: ${r.previous_academic_year} → ${r.new_academic_year}. Переведено: ${r.promoted}.`
+      );
+      await refreshSettings();
+      setAdvanceConfirmOpen(false);
+    } catch (err: unknown) {
+      const e = err as Error & { issues?: { length: number } };
+      const extra =
+        e.issues && e.issues.length > 0 ? ` Проблем: ${e.issues.length}.` : '';
+      toast.error((e?.message || 'Ошибка перевода года') + extra);
+    } finally {
+      setAdvancing(false);
+    }
   };
 
   const handleWeightsChange = (key: string, value: number) => {
@@ -463,6 +516,78 @@ export default function SystemSettingsPage() {
                 </CardContent>
               </Card>
             </div>
+
+            <Card className="border-amber-200/60 dark:border-amber-900/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ArrowRightCircle className="h-5 w-5" />
+                  Перевод на новый учебный год
+                </CardTitle>
+                <CardDescription>
+                  Активные ученики переводятся в следующий параллельный класс с той же литерой (например 9А → 10А).
+                  В настройках увеличивается текущий учебный год. Ранее сохранённые оценки не удаляются — они остаются
+                  привязанными к соответствующему учебному году в базе.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAdvanceDryRun}
+                  disabled={advanceChecking || advancing}
+                >
+                  {advanceChecking ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Проверка…
+                    </>
+                  ) : (
+                    'Проверить без изменений'
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setAdvanceConfirmOpen(true)}
+                  disabled={advanceChecking || advancing}
+                >
+                  Перевести классы и год
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Dialog open={advanceConfirmOpen} onOpenChange={setAdvanceConfirmOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Подтвердить новый учебный год</DialogTitle>
+                  <DialogDescription>
+                    Будет выполнен перевод всех активных учеников на следующий класс (где это возможно), затем в
+                    настройках учебный год сменится на следующий (например 2024-2025 → 2025-2026). Операцию нельзя
+                    отменить автоматически. При наличии ошибок справочника классов перевод не выполнится — сначала
+                    устраните их (кнопка «Проверить без изменений»).
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="gap-2 sm:gap-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAdvanceConfirmOpen(false)}
+                    disabled={advancing}
+                  >
+                    Отмена
+                  </Button>
+                  <Button type="button" onClick={handleAdvanceExecute} disabled={advancing}>
+                    {advancing ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Выполняется…
+                      </>
+                    ) : (
+                      'Подтвердить'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Classes Management Tab */}

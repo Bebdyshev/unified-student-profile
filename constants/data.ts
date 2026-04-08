@@ -174,14 +174,6 @@ export const navItems: NavItem[] = [
     teacherOnly: true
   },
   {
-    title: 'Предметные группы',
-    url: '/dashboard/teacher/subject-groups',
-    icon: 'layers',
-    isActive: false,
-    items: [],
-    teacherOnly: true
-  },
-  {
     title: 'Настройки системы',
     url: '/admin/settings',
     icon: 'settings',
@@ -189,6 +181,31 @@ export const navItems: NavItem[] = [
     items: []
   },
 
+];
+
+/** Explicit navigation for teachers only — keep in sync with app-sidebar teacher branch */
+export const teacherNavItems: NavItem[] = [
+  {
+    title: 'Панель учителя',
+    url: '/dashboard/teacher',
+    icon: 'bookOpen',
+    isActive: false,
+    items: []
+  },
+  {
+    title: 'Мои классы',
+    url: '/dashboard/teacher/classes',
+    icon: 'school',
+    isActive: false,
+    items: []
+  },
+  {
+    title: 'Аналитика учеников',
+    url: '/dashboard/analytics',
+    icon: 'barChart',
+    isActive: false,
+    items: []
+  },
 ];
 
 interface Question {
