@@ -78,6 +78,7 @@ interface Student {
   name: string;
   email?: string;
   grade_id: number;
+  source_grade_id?: number;
   actual_scores?: number[];
   predicted_scores?: number[];
   avg_percentage?: number;
@@ -279,6 +280,18 @@ export default function AnalyticsPage() {
     return data.subjects;
   }, [user?.type, teacherSubjectNames, data.subjects]);
 
+  const parallelGradeIds = useMemo(() => {
+    if (selectedParallel === 'all') return null
+    const ids = new Set<number>()
+    data.grades.forEach((g) => {
+      if (g.id < 0) return
+      if (g.parallel === selectedParallel || g.grade.startsWith(selectedParallel)) {
+        ids.add(g.id)
+      }
+    })
+    return ids
+  }, [data.grades, selectedParallel])
+
   const fetchData = async (subject?: string) => {
     setLoading(true);
     try {
@@ -317,6 +330,7 @@ export default function AnalyticsPage() {
                   (typeof classItem?.grade_id === 'number' ? classItem.grade_id : undefined) ??
                   gradesRes.find((g: Grade) => g.grade === classItem.grade_liter)?.id
                 ) || 0,
+                source_grade_id: student.source_grade_id ?? student.grade_id,
                 actual_scores: student.actual_scores || student.actual_score,
                 predicted_scores: student.predicted_scores,
                 avg_percentage: student.avg_percentage,
@@ -356,19 +370,30 @@ export default function AnalyticsPage() {
   // Filter grades by selected parallel
   const filteredGrades = useMemo(() => {
     if (selectedParallel === 'all') return data.grades;
-    return data.grades.filter(g => 
-      g.parallel === selectedParallel || g.grade.startsWith(selectedParallel)
+    const groupIdsWithParallel = new Set<number>()
+    for (const s of data.students) {
+      if (s.grade_id >= 0) continue
+      if (s.source_grade_id != null && parallelGradeIds?.has(s.source_grade_id)) {
+        groupIdsWithParallel.add(s.grade_id)
+      }
+    }
+    return data.grades.filter(g =>
+      (g.id >= 0 && (g.parallel === selectedParallel || g.grade.startsWith(selectedParallel))) ||
+      (g.id < 0 && groupIdsWithParallel.has(g.id))
     );
-  }, [data.grades, selectedParallel]);
+  }, [data.grades, data.students, selectedParallel, parallelGradeIds]);
 
   // Filter students
   const filteredStudents = useMemo(() => {
     let students = [...data.students];
 
     // Filter by parallel
-    if (selectedParallel !== 'all') {
-      const gradeIds = filteredGrades.map(g => g.id);
-      students = students.filter(s => gradeIds.includes(s.grade_id));
+    if (selectedParallel !== 'all' && parallelGradeIds) {
+      students = students.filter(s => {
+        if (s.grade_id >= 0) return parallelGradeIds.has(s.grade_id)
+        if (s.source_grade_id != null) return parallelGradeIds.has(s.source_grade_id)
+        return false
+      });
     }
 
     // Filter by grade
@@ -391,7 +416,7 @@ export default function AnalyticsPage() {
     }
 
     return students;
-  }, [data.students, selectedParallel, selectedGrade, selectedDangerLevel, searchQuery, filteredGrades]);
+  }, [data.students, selectedParallel, selectedGrade, selectedDangerLevel, searchQuery, parallelGradeIds]);
 
   // Statistics
   const stats = useMemo(() => {
