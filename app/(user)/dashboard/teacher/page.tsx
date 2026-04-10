@@ -19,6 +19,7 @@ import {
 } from '@/lib/teacher-assignments';
 import { UploadScores } from '@/app/(user)/dashboard/classes/_components/upload-scores';
 import { TeacherSubjectGroupsPanel } from '@/app/(user)/dashboard/teacher/_components/teacher-subject-groups-panel';
+import type { SubjectGroup } from '@/types';
 
 interface DashboardStats {
   totalStudents: number;
@@ -31,6 +32,10 @@ const gradesEntryHref = (subjectId: number, gradeId: number | null) => {
   const g = gradeId != null ? `&grade=${gradeId}` : '';
   return `/dashboard/teacher/grades/entry?subject=${subjectId}${g}`;
 };
+const groupEntryHref = (subjectId: number, groupId: number, gradeId?: number | null) => {
+  const g = gradeId != null ? `&grade=${gradeId}` : '';
+  return `/dashboard/teacher/grades/entry?subject=${subjectId}&group=${groupId}${g}`;
+};
 
 type TabValue = 'overview' | 'subject-groups';
 
@@ -39,6 +44,7 @@ function TeacherDashboardContent() {
   const router = useRouter();
 
   const [assignments, setAssignments] = useState<TeacherAssignmentRow[]>([]);
+  const [subjectGroups, setSubjectGroups] = useState<SubjectGroup[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalStudents: 0,
     totalClasses: 0,
@@ -64,12 +70,14 @@ function TeacherDashboardContent() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [assignmentsData, me] = await Promise.all([
+      const [assignmentsData, me, groups] = await Promise.all([
         api.getMyTeacherAssignments(),
-        api.getCurrentUser()
+        api.getCurrentUser(),
+        api.getMySubjectGroups().catch(() => [] as SubjectGroup[])
       ]);
       setAssignments(assignmentsData);
       setCurrentUser(me);
+      setSubjectGroups(groups);
 
       const uniqueSubjects = new Set(assignmentsData.map((a: TeacherAssignmentRow) => a.subject_id));
       const uniqueClasses = new Set(
@@ -138,6 +146,8 @@ function TeacherDashboardContent() {
     subjectName: string;
     subgroup?: string;
     isUnassigned: boolean;
+    subjectGroupId?: number;
+    isSubjectGroup?: boolean;
   };
 
   const assignmentTableRows: AssignmentTableRow[] = [];
@@ -164,6 +174,19 @@ function TeacherDashboardContent() {
       subjectName: row.subjectName,
       subgroup: row.subgroup,
       isUnassigned: true,
+    });
+  }
+  for (const sg of subjectGroups) {
+    assignmentTableRows.push({
+      key: `sg-${sg.id}`,
+      gradeId: sg.grade_id ?? null,
+      gradeLabel: sg.name,
+      subjectId: sg.subject_id,
+      subjectName: sg.subject_name ?? `Предмет #${sg.subject_id}`,
+      subgroup: undefined,
+      isUnassigned: false,
+      subjectGroupId: sg.id,
+      isSubjectGroup: true,
     });
   }
 
@@ -276,7 +299,7 @@ function TeacherDashboardContent() {
               <CardHeader>
                 <CardTitle>Мои назначения</CardTitle>
                 <CardDescription>
-                  Табличный ввод оценок или загрузка Excel — для каждой строки (класс + предмет)
+                  Табличный ввод оценок или загрузка Excel — для классов и ваших предметных групп
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -328,6 +351,8 @@ function TeacherDashboardContent() {
                             ${
                               row.isUnassigned
                                 ? 'bg-amber-50/40 dark:bg-amber-950/20'
+                                : row.isSubjectGroup
+                                  ? 'bg-indigo-50/40 dark:bg-indigo-950/20'
                                 : index % 2 === 1
                                   ? 'bg-muted/20'
                                   : ''
@@ -337,17 +362,25 @@ function TeacherDashboardContent() {
                               <td className="px-4 py-3 align-middle">
                                 <div className="flex items-center gap-2">
                                   <School
-                                    className={`h-4 w-4 shrink-0 ${row.isUnassigned ? 'text-amber-600' : 'text-primary'}`}
+                                    className={`h-4 w-4 shrink-0 ${
+                                      row.isUnassigned
+                                        ? 'text-amber-600'
+                                        : row.isSubjectGroup
+                                          ? 'text-indigo-600'
+                                          : 'text-primary'
+                                    }`}
                                     aria-hidden
                                   />
                                   <span
                                     className={
                                       row.isUnassigned
                                         ? 'text-amber-900 dark:text-amber-100 font-medium'
+                                        : row.isSubjectGroup
+                                          ? 'text-indigo-900 dark:text-indigo-100 font-medium'
                                         : 'font-medium'
                                     }
                                   >
-                                    {row.gradeLabel}
+                                    {row.isSubjectGroup ? `Группа: ${row.gradeLabel}` : row.gradeLabel}
                                   </span>
                                 </div>
                               </td>
@@ -365,7 +398,11 @@ function TeacherDashboardContent() {
                                 <div className="flex flex-wrap justify-end gap-2">
                                   <Button variant="default" size="sm" asChild className="gap-1 h-8">
                                     <Link
-                                      href={gradesEntryHref(row.subjectId, row.gradeId)}
+                                      href={
+                                        row.isSubjectGroup && row.subjectGroupId
+                                          ? groupEntryHref(row.subjectId, row.subjectGroupId, row.gradeId)
+                                          : gradesEntryHref(row.subjectId, row.gradeId)
+                                      }
                                       aria-label={`Табличный ввод: ${row.subjectName}, ${row.gradeLabel}`}
                                     >
                                       <Table2 className="h-3.5 w-3.5" />

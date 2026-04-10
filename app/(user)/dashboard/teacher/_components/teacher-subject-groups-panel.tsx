@@ -87,22 +87,32 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
   const [detailLoading, setDetailLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [createSubjectId, setCreateSubjectId] = useState<string>('')
-  const [createAnchorId, setCreateAnchorId] = useState<string>('')
   const [createName, setCreateName] = useState('')
   const [savingMembers, setSavingMembers] = useState(false)
   const [search, setSearch] = useState('')
   const [letterFilter, setLetterFilter] = useState<string>('all')
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set())
+  const nextGroupNameForSubject = useCallback((subjectId: number) => {
+    const regex = /^Group #(\d+)$/
+    const used = new Set<number>()
+    for (const g of groups) {
+      if (g.subject_id !== subjectId) continue
+      const m = (g.name || '').match(regex)
+      if (!m) continue
+      used.add(parseInt(m[1], 10))
+    }
+    let n = 1
+    while (used.has(n)) n += 1
+    return `Group #${n}`
+  }, [groups])
+
   /** Сырые строки GET /teacher/my-assignments — для предметов/якорей, если синтетика обрезана фильтрами API */
   const [sourceAssignmentsFromApi, setSourceAssignmentsFromApi] = useState<TeacherAssignmentRow[]>([])
-  /** Сколько классов 11–12 пришло из справочника (якоря) */
-  const [anchorGradesAvailableCount, setAnchorGradesAvailableCount] = useState(0)
 
   const loadBase = useCallback(async () => {
     setLoading(true)
     setAccessBlock('none')
     setSourceAssignmentsFromApi([])
-    setAnchorGradesAvailableCount(0)
     try {
       const currentUser = await api.getCurrentUser()
       const isAdmin = currentUser.type === 'admin'
@@ -157,9 +167,8 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
 
         const assignmentRows = (await api.getMyTeacherAssignments()) as LibTeacherAssignmentRow[]
 
-        const [g, allGrades] = await Promise.all([
+        const [g] = await Promise.all([
           api.getMySubjectGroups(),
-          api.getAllGrades({ purpose: 'subject_group_anchors' }),
         ])
         setGroups(g)
 
@@ -171,31 +180,13 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
           subject_allows_subject_groups: x.subject_allows_subject_groups
         }))
 
-        const teacherSubjects = new Map<number, string>()
-        for (const row of realAssignments) {
-          if (row.subject_allows_subject_groups !== true) continue
-          teacherSubjects.set(row.subject_id, row.subject_name)
-        }
-
-        const grades1112 = allGrades.filter((grade: { grade: string; parallel: string }) => {
-          const p = parallelFromGradeLabel(`${grade.grade}${grade.parallel}`)
-          return p !== null
-        })
-
-        const rows: TeacherAssignmentRow[] = []
-        teacherSubjects.forEach((sname, sid) => {
-          for (const grade of grades1112) {
-            rows.push({
-              subject_id: sid,
-              subject_name: sname,
-              grade_id: grade.id,
-              grade_name: `${grade.grade}${grade.parallel}`
-            })
-          }
+        const rows: TeacherAssignmentRow[] = realAssignments.filter((row) => {
+          if (row.subject_allows_subject_groups === false) return false
+          if (row.grade_id == null) return false
+          return parallelFromGradeLabel(row.grade_name) !== null
         })
         assignmentsData = rows
         setSourceAssignmentsFromApi(realAssignments)
-        setAnchorGradesAvailableCount(grades1112.length)
       }
 
       setAssignments(assignmentsData)
@@ -218,7 +209,9 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
         return true
       }
       return sourceAssignmentsFromApi.some(
-        (r) => r.subject_id === subjectId && r.subject_allows_subject_groups === true
+        (r) =>
+          r.subject_id === subjectId &&
+          r.subject_allows_subject_groups !== false
       )
     }
     const add = (subjectId: number, name: string | null | undefined) => {
@@ -251,57 +244,16 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
     }
     if (
       map.size === 0 &&
-      sourceAssignmentsFromApi.some((r) => r.subject_allows_subject_groups === true) &&
-      anchorGradesAvailableCount > 0
+      sourceAssignmentsFromApi.some((r) => r.subject_allows_subject_groups !== false)
     ) {
       for (const row of sourceAssignmentsFromApi) {
-        if (row.subject_allows_subject_groups === true) {
-          add(row.subject_id, row.subject_name)
-        }
+        add(row.subject_id, row.subject_name)
       }
     }
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ru'))
-  }, [assignments, sourceAssignmentsFromApi, anchorGradesAvailableCount])
-
-  const anchorOptions = useMemo(() => {
-    const sid = parseInt(createSubjectId, 10)
-    if (!sid) return []
-    const rows: { grade_id: number; label: string }[] = []
-    const seen = new Set<number>()
-    const pushRow = (gradeId: number, label: string) => {
-      if (seen.has(gradeId)) return
-      seen.add(gradeId)
-      rows.push({ grade_id: gradeId, label })
-    }
-    for (const a of assignments) {
-      if (a.subject_id !== sid || a.grade_id == null) continue
-      if (parallelFromGradeLabel(a.grade_name) == null) continue
-      pushRow(a.grade_id, a.grade_name || `Класс #${a.grade_id}`)
-    }
-    if (rows.length === 0 && sourceAssignmentsFromApi.length > 0) {
-      for (const row of sourceAssignmentsFromApi) {
-        if (row.subject_id !== sid || row.grade_id == null) continue
-        if (row.subject_allows_subject_groups !== true) continue
-        if (parallelFromGradeLabel(row.grade_name) == null) continue
-        pushRow(row.grade_id, row.grade_name || `Класс #${row.grade_id}`)
-      }
-    }
-    return rows.sort((a, b) => a.label.localeCompare(b.label, 'ru', { numeric: true }))
-  }, [assignments, createSubjectId, sourceAssignmentsFromApi])
-
-  useEffect(() => {
-    if (!createOpen) return
-    if (anchorOptions.length === 0) {
-      setCreateAnchorId('')
-      return
-    }
-    const stillValid = anchorOptions.some((o) => String(o.grade_id) === createAnchorId)
-    if (!stillValid) {
-      setCreateAnchorId(String(anchorOptions[0].grade_id))
-    }
-  }, [createOpen, anchorOptions, createAnchorId])
+  }, [assignments, sourceAssignmentsFromApi])
 
   const selectedGroup = useMemo(
     () => groups.find((g) => g.id === selectedGroupId) ?? null,
@@ -361,30 +313,34 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
 
   const handleOpenCreate = () => {
     if (subjectOptions.length > 0) {
-      setCreateSubjectId(String(subjectOptions[0].id))
+      const subjectId = subjectOptions[0].id
+      setCreateSubjectId(String(subjectId))
+      setCreateName(nextGroupNameForSubject(subjectId))
     } else {
       setCreateSubjectId('')
+      setCreateName('')
       toast.warning(
-        'Нет предметов из ваших назначений. Обратитесь к администратору, чтобы назначить предметы (и при необходимости создать классы 11–12).'
+        'Нет предметов для группы: нужны активные назначения и в справочнике предметов должна быть включена опция «Предметные группы (11–12)» для вашего предмета. Обратитесь к администратору.'
       )
     }
-    setCreateAnchorId('')
-    setCreateName('')
     setCreateOpen(true)
   }
 
   const handleCreateGroup = async () => {
     const sid = parseInt(createSubjectId, 10)
-    const aid = parseInt(createAnchorId, 10)
-    if (!sid || !aid || !createName.trim()) {
-      toast.error('Заполните предмет, якорный класс и название')
+    const name = createName.trim()
+    if (!sid || !name) {
+      toast.error('Заполните предмет и название')
+      return
+    }
+    if (!/^Group #\d+$/.test(name)) {
+      toast.error('Название должно быть в формате Group #1, Group #2 и т.д.')
       return
     }
     try {
       await api.createTeacherSubjectGroup({
         subject_id: sid,
-        name: createName.trim(),
-        anchor_grade_id: aid
+        name
       })
       toast.success('Группа создана')
       setCreateOpen(false)
@@ -705,24 +661,16 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
           <DialogHeader>
             <DialogTitle>Новая предметная группа</DialogTitle>
             <DialogDescription>
-              Якорный класс задаёт параллель (11 или 12). Учеников из других литер этой параллели можно добавить
-              позже.
+              Создайте группу по предмету. Затем добавьте в неё учеников из нескольких классов 11–12.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             {subjectOptions.length === 0 && (
               <Alert variant="destructive">
                 <AlertDescription>
-                  Список предметов пуст: нет подходящих назначений (нужен активный предмет физики/биологии/химии/информатики
-                  и при необходимости классы 11–12 в справочнике). Обновите страницу после изменений администратором.
-                </AlertDescription>
-              </Alert>
-            )}
-            {subjectOptions.length > 0 && createSubjectId && anchorOptions.length === 0 && (
-              <Alert>
-                <AlertDescription>
-                  Для выбранного предмета не найдено классов 11–12. В справочнике школы должны быть параллели 11 и 12
-                  (например 11А, 12Б) — их создаёт администратор.
+                  Нет предметов для выбора: проверьте активные назначения учителю и что в справочнике предметов у нужного
+                  предмета включено «Предметные группы (11–12)». Нужны также классы 11–12 в справочнике школы. После
+                  изменений администратором обновите страницу.
                 </AlertDescription>
               </Alert>
             )}
@@ -730,10 +678,11 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
               <Label>Предмет</Label>
               <Select
                 value={createSubjectId || undefined}
-                onValueChange={(v) => {
-                  setCreateSubjectId(v)
-                  setCreateAnchorId('')
-                }}
+                    onValueChange={(v) => {
+                      setCreateSubjectId(v)
+                  const sid = parseInt(v, 10)
+                  if (sid) setCreateName(nextGroupNameForSubject(sid))
+                    }}
                 disabled={subjectOptions.length === 0}
               >
                 <SelectTrigger aria-label="Предмет">
@@ -749,31 +698,12 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Якорный класс (11/12)</Label>
-              <Select
-                value={createAnchorId || undefined}
-                onValueChange={setCreateAnchorId}
-                disabled={!createSubjectId || anchorOptions.length === 0}
-              >
-                <SelectTrigger aria-label="Якорный класс">
-                  <SelectValue placeholder="Выберите класс (11 или 12)" />
-                </SelectTrigger>
-                <SelectContent position="popper" className="z-[120]">
-                  {anchorOptions.map((o) => (
-                    <SelectItem key={o.grade_id} value={String(o.grade_id)}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="sg-new-name">Название группы</Label>
               <Input
                 id="sg-new-name"
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
-                placeholder="Например, Биология — профиль А"
+                placeholder="Group #1"
               />
             </div>
           </div>
@@ -787,7 +717,6 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
               disabled={
                 subjectOptions.length === 0 ||
                 !createSubjectId ||
-                anchorOptions.length === 0 ||
                 !createName.trim()
               }
             >

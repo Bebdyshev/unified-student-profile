@@ -19,6 +19,7 @@ import api from '@/lib/api';
 import Link from 'next/link';
 import { UploadScores } from '@/app/(user)/dashboard/classes/_components/upload-scores';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import type { SubjectGroup } from '@/types';
 
 interface TeacherAssignment {
   id: number;
@@ -26,6 +27,8 @@ interface TeacherAssignment {
   subject_id: number;
   grade_id: number | null;
   subgroup_id: number | null;
+  subject_group_id?: number | null;
+  subject_group_name?: string | null;
   teacher_name: string;
   subject_name: string;
   grade_name: string | null;
@@ -81,10 +84,13 @@ function TeacherGradeEntryContent() {
   const searchParams = useSearchParams();
   const initialSubjectId = searchParams.get('subject');
   const initialGradeId = searchParams.get('grade');
+  const initialSubjectGroupId = searchParams.get('group');
 
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
+  const [activeSubjectGroups, setActiveSubjectGroups] = useState<SubjectGroup[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialSubjectId || '');
   const [selectedGradeId, setSelectedGradeId] = useState<string>(initialGradeId || '');
+  const [selectedSubjectGroupId, setSelectedSubjectGroupId] = useState<string>(initialSubjectGroupId || '');
   const [students, setStudents] = useState<Student[]>([]);
   const [scoreEdits, setScoreEdits] = useState<Record<number, ScoreEdit>>({});
   const [loading, setLoading] = useState(true);
@@ -105,11 +111,33 @@ function TeacherGradeEntryContent() {
     .map(a => ({ id: a.grade_id!, name: a.grade_name! }))
     .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
 
+  const availableSubjectGroups = assignments
+    .filter(a => !selectedSubjectId || a.subject_id === Number(selectedSubjectId))
+    .filter(a => a.subject_group_id != null)
+    .filter(a => activeSubjectGroups.some((g) => g.id === a.subject_group_id))
+    .map(a => ({ id: a.subject_group_id!, name: a.subject_group_name || `Group #${a.subject_group_id}` }))
+    .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+
+  const mixedClassGroupOptions = [
+    ...availableGrades.map((g) => ({ value: `grade:${g.id}`, label: g.name })),
+    ...availableSubjectGroups.map((g) => ({ value: `group:${g.id}`, label: g.name })),
+  ]
+
+  const mixedSelectionValue = selectedSubjectGroupId
+    ? `group:${selectedSubjectGroupId}`
+    : selectedGradeId
+      ? `grade:${selectedGradeId}`
+      : '__none__'
+
   const fetchAssignments = async () => {
     try {
       setLoading(true);
-      const data = await api.getMyTeacherAssignments();
+      const [data, groups] = await Promise.all([
+        api.getMyTeacherAssignments(),
+        api.getMySubjectGroups().catch(() => [] as SubjectGroup[])
+      ])
       setAssignments(data);
+      setActiveSubjectGroups(groups.filter((g) => g.is_active === 1));
       const subFromUrl = searchParams.get('subject');
       const gradeFromUrl = searchParams.get('grade');
       if (subFromUrl) {
@@ -122,6 +150,10 @@ function TeacherGradeEntryContent() {
       } else if (data.length === 1 && data[0].grade_id) {
         setSelectedGradeId(String(data[0].grade_id));
       }
+      const groupFromUrl = searchParams.get('group');
+      if (groupFromUrl) {
+        setSelectedSubjectGroupId(groupFromUrl);
+      }
     } catch (err) {
       const apiError = handleApiError(err);
       toast.error(`Ошибка загрузки назначений: ${apiError.message}`);
@@ -131,11 +163,15 @@ function TeacherGradeEntryContent() {
   };
 
   const fetchStudents = async () => {
-    if (!selectedSubjectId || !selectedGradeId) return;
+    if (!selectedSubjectId || (!selectedGradeId && !selectedSubjectGroupId)) return;
     try {
       setLoading(true);
-      const subject = subjects.find(s => s.id === Number(selectedSubjectId));
-      const data = await api.getStudentsByGrade(Number(selectedGradeId), subject?.name);
+      const data = await api.getTeacherStudents(
+        Number(selectedSubjectId),
+        selectedSubjectGroupId ? undefined : Number(selectedGradeId),
+        undefined,
+        selectedSubjectGroupId ? Number(selectedSubjectGroupId) : undefined
+      );
       setStudents(data);
 
       const edits: Record<number, ScoreEdit> = {};
@@ -169,11 +205,11 @@ function TeacherGradeEntryContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (selectedSubjectId && selectedGradeId) {
+    if (selectedSubjectId && (selectedGradeId || selectedSubjectGroupId)) {
       fetchStudents();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSubjectId, selectedGradeId]);
+  }, [selectedSubjectId, selectedGradeId, selectedSubjectGroupId]);
 
   const handleScoreChange = (studentId: number, quarter: string, value: string) => {
     const numValue = value === '' ? 0 : parseFloat(value);
@@ -248,7 +284,12 @@ function TeacherGradeEntryContent() {
         } else {
           const subject = subjects.find(s => s.id === Number(selectedSubjectId));
           if (subject) {
-            const result = await api.createScore(edit.studentId, subject.id, edit.scores);
+            const result = await api.createScore(
+              edit.studentId,
+              subject.id,
+              edit.scores,
+              selectedSubjectGroupId ? Number(selectedSubjectGroupId) : undefined
+            );
             setScoreEdits(prev => ({
               ...prev,
               [edit.studentId]: { ...prev[edit.studentId], scoreId: result.score.id }
@@ -292,6 +333,7 @@ function TeacherGradeEntryContent() {
   const dirtyCount = Object.values(scoreEdits).filter(e => e.isDirty).length;
   const selectedSubject = subjects.find(s => s.id === Number(selectedSubjectId));
   const selectedGrade = availableGrades.find(g => g.id === Number(selectedGradeId));
+  const selectedSubjectGroup = availableSubjectGroups.find(g => g.id === Number(selectedSubjectGroupId));
 
   if (loading && assignments.length === 0) {
     return (
@@ -318,9 +360,9 @@ function TeacherGradeEntryContent() {
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Ввод оценок</h1>
               <p className="text-sm text-muted-foreground">
-                {selectedSubject && selectedGrade
-                  ? `${selectedSubject.name} — ${selectedGrade.name}`
-                  : 'Выберите предмет и класс'}
+                {selectedSubject && (selectedGrade || selectedSubjectGroup)
+                  ? `${selectedSubject.name} — ${selectedSubjectGroup ? selectedSubjectGroup.name : selectedGrade?.name}`
+                  : 'Выберите предмет и класс или группу'}
               </p>
             </div>
           </div>
@@ -337,7 +379,7 @@ function TeacherGradeEntryContent() {
             }
             onUploadComplete={() => {
               fetchAssignments();
-              if (selectedSubjectId && selectedGradeId) fetchStudents();
+              if (selectedSubjectId && (selectedGradeId || selectedSubjectGroupId)) fetchStudents();
             }}
             trigger={
               <Button variant="outline" size="sm" className="gap-2">
@@ -351,7 +393,14 @@ function TeacherGradeEntryContent() {
         {/* Inline filters */}
         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
           <BookOpen className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={selectedSubjectId} onValueChange={(v) => { setSelectedSubjectId(v); setSelectedGradeId(''); }}>
+          <Select
+            value={selectedSubjectId}
+            onValueChange={(v) => {
+              setSelectedSubjectId(v)
+              setSelectedGradeId('')
+              setSelectedSubjectGroupId('')
+            }}
+          >
             <SelectTrigger className="w-[220px] h-9 bg-background">
               <SelectValue placeholder="Предмет" />
             </SelectTrigger>
@@ -363,20 +412,56 @@ function TeacherGradeEntryContent() {
           </Select>
 
           <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={selectedGradeId} onValueChange={setSelectedGradeId} disabled={!selectedSubjectId}>
-            <SelectTrigger className="w-[140px] h-9 bg-background">
-              <SelectValue placeholder="Класс" />
+          <Select
+            value={mixedSelectionValue}
+            onValueChange={(v) => {
+              if (v === '__none__') {
+                setSelectedGradeId('')
+                setSelectedSubjectGroupId('')
+                return
+              }
+              const [kind, id] = v.split(':')
+              if (kind === 'grade') {
+                setSelectedGradeId(id)
+                setSelectedSubjectGroupId('')
+              } else {
+                setSelectedSubjectGroupId(id)
+                setSelectedGradeId('')
+              }
+            }}
+            disabled={!selectedSubjectId || mixedClassGroupOptions.length === 0}
+          >
+            <SelectTrigger className="w-[240px] h-9 bg-background">
+              <SelectValue placeholder="Класс или группа" />
             </SelectTrigger>
             <SelectContent>
-              {availableGrades.map(g => (
-                <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>
+              <SelectItem value="__none__">Не выбрано</SelectItem>
+              {availableGrades.length > 0 && (
+                <SelectItem value="__grades_header__" disabled>
+                  Классы
+                </SelectItem>
+              )}
+              {availableGrades.map((g) => (
+                <SelectItem key={`grade-${g.id}`} value={`grade:${g.id}`}>
+                  {g.name}
+                </SelectItem>
+              ))}
+              {availableSubjectGroups.length > 0 && (
+                <SelectItem value="__groups_header__" disabled>
+                  Группы
+                </SelectItem>
+              )}
+              {availableSubjectGroups.map((g) => (
+                <SelectItem key={`group-${g.id}`} value={`group:${g.id}`}>
+                  {g.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
           <div className="flex-1" />
 
-          {selectedSubjectId && selectedGradeId && (
+          {selectedSubjectId && (selectedGradeId || selectedSubjectGroupId) && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Keyboard className="h-3.5 w-3.5" />
               <span className="hidden md:inline">Tab/Enter для навигации</span>
@@ -385,7 +470,7 @@ function TeacherGradeEntryContent() {
         </div>
 
         {/* Table */}
-        {selectedSubjectId && selectedGradeId && (
+        {selectedSubjectId && (selectedGradeId || selectedSubjectGroupId) && (
           <>
             {loading ? (
               <div className="flex items-center justify-center py-16">
@@ -578,10 +663,10 @@ function TeacherGradeEntryContent() {
         )}
 
         {/* No selection prompt */}
-        {assignments.length > 0 && (!selectedSubjectId || !selectedGradeId) && !loading && (
+        {assignments.length > 0 && (!selectedSubjectId || (!selectedGradeId && !selectedSubjectGroupId)) && !loading && (
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <BookOpen className="h-12 w-12 mb-4 opacity-20" />
-            <p className="text-sm font-medium">Выберите предмет и класс</p>
+            <p className="text-sm font-medium">Выберите предмет и класс или группу</p>
             <p className="text-xs mt-1">Используйте фильтры выше для начала работы</p>
           </div>
         )}

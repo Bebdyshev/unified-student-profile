@@ -668,12 +668,18 @@ class ApiService {
     }
   }
 
-  async createScore(studentId: number, subjectId: number, actualScores?: Record<string, number>): Promise<any> {
+  async createScore(
+    studentId: number,
+    subjectId: number,
+    actualScores?: Record<string, number>,
+    subjectGroupId?: number
+  ): Promise<any> {
     try {
       const response = await apiClient.post('/grades/scores', {
         student_id: studentId,
         subject_id: subjectId,
-        actual_scores: actualScores
+        actual_scores: actualScores,
+        subject_group_id: subjectGroupId
       });
       return response.data;
     } catch (error) {
@@ -700,13 +706,19 @@ class ApiService {
     }
   }
 
-  async getTeacherStudents(subjectId: number, gradeId?: number, subgroupId?: number): Promise<any[]> {
+  async getTeacherStudents(
+    subjectId: number,
+    gradeId?: number,
+    subgroupId?: number,
+    subjectGroupId?: number
+  ): Promise<any[]> {
     try {
       const response = await apiClient.get('/grades/teacher/students', {
         params: {
           subject_id: subjectId,
           grade_id: gradeId,
-          subgroup_id: subgroupId
+          subgroup_id: subgroupId,
+          subject_group_id: subjectGroupId
         }
       });
       return response.data;
@@ -1038,7 +1050,6 @@ class ApiService {
   async createTeacherSubjectGroup(data: {
     subject_id: number;
     name: string;
-    anchor_grade_id: number;
   }): Promise<{ id: number; message: string }> {
     try {
       const response = await apiClient.post('/subject-groups/teacher', data);

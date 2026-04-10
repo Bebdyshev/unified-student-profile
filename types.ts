@@ -36,7 +36,7 @@ export interface UpdateSubgroup {
 
 export interface SubjectGroup {
   id: number;
-  grade_id: number;
+  grade_id: number | null;
   subject_id: number;
   name: string;
   is_active: number;

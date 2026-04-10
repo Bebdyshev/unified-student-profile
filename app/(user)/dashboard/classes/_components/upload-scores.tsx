@@ -155,13 +155,17 @@ export function UploadScores({
   useEffect(() => {
     if (formData.grade_id > 0) {
       loadSubgroups(formData.grade_id);
-      loadSubjectGroups(formData.grade_id);
+      if (userType !== 'teacher') {
+        loadSubjectGroups(formData.grade_id);
+      }
     } else {
       setSubgroups([]);
-      setSubjectGroups([]);
+      if (userType !== 'teacher') {
+        setSubjectGroups([]);
+      }
       setFormData(prev => ({ ...prev, subgroup_id: undefined, subject_group_id: undefined }));
     }
-  }, [formData.grade_id]);
+  }, [formData.grade_id, userType]);
 
   // Clear subject_group_id when subject changes (group might not match new subject)
   useEffect(() => {
@@ -212,7 +216,10 @@ export function UploadScores({
     try {
       // For teachers, grades come from their assignments
       if (userType === 'teacher') {
-        const gradesData = await api.getAllGrades();
+        const [gradesData, teacherGroups] = await Promise.all([
+          api.getAllGrades(),
+          api.getMySubjectGroups().catch(() => [])
+        ]);
         // Filter grades based on teacher's assignments
         const assignedGradeIds = new Set(
           teacherAssignments
@@ -221,6 +228,7 @@ export function UploadScores({
         );
         const filteredGrades = gradesData.filter((g: any) => assignedGradeIds.has(g.id));
         setGrades(filteredGrades);
+        setSubjectGroups(teacherGroups as SubjectGroup[]);
       } else {
         // For admins, load all
         const [gradesData, subjectsData] = await Promise.all([
@@ -274,7 +282,7 @@ export function UploadScores({
   const validateForm = (): string[] => {
     const errors: string[] = [];
     
-    if (!formData.grade_id) errors.push('Выберите класс');
+    if (!formData.grade_id && !formData.subject_group_id) errors.push('Выберите класс или предметную группу');
     if (!formData.subject_id) errors.push('Выберите предмет');
     // Only check teacher name for admins (teachers have it auto-filled)
     if (userType === 'admin' && !formData.teacher_name.trim()) errors.push('Введите имя учителя');
@@ -295,6 +303,9 @@ export function UploadScores({
       return;
     }
 
+    const selectedGroup = subjectGroups.find((g) => g.id === formData.subject_group_id)
+    const effectiveGradeId = formData.grade_id || selectedGroup?.grade_id || 0
+
     setIsUploading(true);
     setUploadProgress(0);
     setUploadResult(null);
@@ -312,7 +323,7 @@ export function UploadScores({
       }, 200);
 
       const result = await api.uploadScores({
-        grade_id: formData.grade_id,
+        grade_id: effectiveGradeId,
         subject_id: formData.subject_id,
         teacher_name: formData.teacher_name,
         semester: formData.semester,
@@ -597,7 +608,16 @@ export function UploadScores({
                   <Label htmlFor="subject-group-select">Предметная группа (11–12 класс)</Label>
                   <Select
                     value={formData.subject_group_id?.toString() || '__none__'}
-                    onValueChange={(value) => handleInputChange('subject_group_id', value !== '__none__' ? parseInt(value) : undefined)}
+                    onValueChange={(value) => {
+                      const nextGroupId = value !== '__none__' ? parseInt(value) : undefined
+                      const nextGroup = subjectGroups.find((g) => g.id === nextGroupId)
+                      setFormData((prev) => ({
+                        ...prev,
+                        subject_group_id: nextGroupId,
+                        // Группа выступает как "виртуальный класс": подставляем её якорный класс для upload API
+                        grade_id: nextGroup?.grade_id ?? prev.grade_id,
+                      }))
+                    }}
                   >
                     <SelectTrigger id="subject-group-select">
                       <SelectValue placeholder="Выберите группу или оставьте пустым" />

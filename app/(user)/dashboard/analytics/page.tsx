@@ -290,15 +290,33 @@ export default function AnalyticsPage() {
       ]);
 
       const allStudents: Student[] = [];
+      const virtualGroupGrades: Grade[] = []
+      const virtualGradeIds = new Set<number>()
       if (classDataRes?.class_data) {
         classDataRes.class_data.forEach((classItem: any) => {
+          if (classItem?.is_subject_group === true && typeof classItem?.grade_id === 'number') {
+            if (!virtualGradeIds.has(classItem.grade_id)) {
+              virtualGradeIds.add(classItem.grade_id)
+              virtualGroupGrades.push({
+                id: classItem.grade_id,
+                grade: classItem.grade_liter || `Группа #${Math.abs(classItem.grade_id)}`,
+                parallel: classItem.parallel_num || '',
+                curator_name: classItem.curator_name || undefined,
+                student_count: Array.isArray(classItem.class) ? classItem.class.length : 0,
+                actual_student_count: Array.isArray(classItem.class) ? classItem.class.length : 0,
+              })
+            }
+          }
           if (classItem.class) {
             classItem.class.forEach((student: any) => {
               allStudents.push({
                 id: student.id,
                 name: student.student_name,
                 email: student.email,
-                grade_id: gradesRes.find((g: Grade) => g.grade === classItem.grade_liter)?.id || 0,
+                grade_id: (
+                  (typeof classItem?.grade_id === 'number' ? classItem.grade_id : undefined) ??
+                  gradesRes.find((g: Grade) => g.grade === classItem.grade_liter)?.id
+                ) || 0,
                 actual_scores: student.actual_scores || student.actual_score,
                 predicted_scores: student.predicted_scores,
                 avg_percentage: student.avg_percentage,
@@ -313,7 +331,7 @@ export default function AnalyticsPage() {
 
       setData({
         students: allStudents,
-        grades: gradesRes,
+        grades: [...gradesRes, ...virtualGroupGrades],
         subjects: subjectsRes,
         parallels: parallelsRes
       });
