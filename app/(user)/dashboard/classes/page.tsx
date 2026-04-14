@@ -685,7 +685,7 @@ export default function ClassManagementPage() {
                   <SelectTrigger id="curator">
                     <SelectValue placeholder="Выберите куратора" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-[300px] overflow-y-auto">
+                  <SelectContent className="max-h-[300px] overflow-y-auto overscroll-contain touch-pan-y">
                     <SelectItem value="none">Без куратора</SelectItem>
                     {curators.map((curator) => (
                       <SelectItem key={curator.id} value={curator.id.toString()}>
@@ -767,7 +767,7 @@ export default function ClassManagementPage() {
                   <SelectTrigger id="edit-curator">
                     <SelectValue placeholder="Выберите куратора" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-[300px] overflow-y-auto">
+                  <SelectContent className="max-h-[300px] overflow-y-auto overscroll-contain touch-pan-y">
                     <SelectItem value="none">Без куратора</SelectItem>
                     {curators.map((curator) => (
                       <SelectItem key={curator.id} value={curator.id.toString()}>

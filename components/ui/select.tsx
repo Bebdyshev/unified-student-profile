@@ -46,6 +46,8 @@ const SelectContent = React.forwardRef<
         className
       )}
       position={position}
+      onWheelCapture={(event) => event.stopPropagation()}
+      onTouchMoveCapture={(event) => event.stopPropagation()}
       {...props}
     >
       <SelectPrimitive.Viewport
