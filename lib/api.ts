@@ -1350,8 +1350,8 @@ class ApiService {
 
   // Excel Upload (Enhanced)
   async uploadScores(uploadData: {
-    grade_id: number;
-    subject_id: number;
+    grade_id?: number;
+    subject_id?: number;
     teacher_name: string;
     semester?: number;
     subgroup_id?: number;
@@ -1360,8 +1360,12 @@ class ApiService {
   }): Promise<import('@/types').ExcelUploadResponse> {
     try {
       const formData = new FormData();
-      formData.append('grade_id', uploadData.grade_id.toString());
-      formData.append('subject_id', uploadData.subject_id.toString());
+      if (uploadData.grade_id) {
+        formData.append('grade_id', uploadData.grade_id.toString());
+      }
+      if (uploadData.subject_id) {
+        formData.append('subject_id', uploadData.subject_id.toString());
+      }
       formData.append('teacher_name', uploadData.teacher_name);
       if (uploadData.semester) {
         formData.append('semester', uploadData.semester.toString());
@@ -1386,9 +1390,10 @@ class ApiService {
     }
   }
 
-  async downloadExcelTemplate(): Promise<Blob> {
+  async downloadExcelTemplate(params?: { grade_id?: number; subject_group_id?: number }): Promise<Blob> {
     try {
       const response = await apiClient.get('/grades/template', {
+        params,
         responseType: 'blob',
       });
       return response.data;

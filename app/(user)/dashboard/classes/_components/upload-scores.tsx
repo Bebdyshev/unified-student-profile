@@ -45,13 +45,16 @@ const DANGER_LEVEL_NAMES = {
   3: 'Критический'
 };
 
+type UploadMode = 'class' | 'group';
+
 export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userType, setUserType] = useState<string>('admin');
-  
+  const [uploadMode, setUploadMode] = useState<UploadMode>('class');
+
   // Form data
   const [formData, setFormData] = useState<UploadFormData>({
     grade_id: 0,
@@ -67,7 +70,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   const [grades, setGrades] = useState<Grade[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subgroups, setSubgroups] = useState<Subgroup[]>([]);
-  const [subjectGroups, setSubjectGroups] = useState<SubjectGroup[]>([]);
+  const [allSubjectGroups, setAllSubjectGroups] = useState<SubjectGroup[]>([]);
   const [teacherNames, setTeacherNames] = useState<string[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
   const [teacherAssignments, setTeacherAssignments] = useState<any[]>([]);
@@ -112,27 +115,32 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
     }
   }, [isOpen]);
 
-  // Load subgroups when grade changes
+  // Class mode: load subgroups when grade changes
   useEffect(() => {
+    if (uploadMode !== 'class') return;
     if (formData.grade_id > 0) {
       loadSubgroups(formData.grade_id);
-      loadSubjectGroups(formData.grade_id);
     } else {
       setSubgroups([]);
-      setSubjectGroups([]);
-      setFormData(prev => ({ ...prev, subgroup_id: undefined, subject_group_id: undefined }));
+      setFormData(prev => ({ ...prev, subgroup_id: undefined }));
     }
-  }, [formData.grade_id]);
+  }, [formData.grade_id, uploadMode]);
 
-  // Clear subject_group_id when subject changes (group might not match new subject)
+  // Group mode: auto-fill grade/subject from the selected subject group
   useEffect(() => {
-    if (formData.subject_group_id && formData.subject_id) {
-      const group = subjectGroups.find((g) => g.id === formData.subject_group_id)
-      if (group && group.subject_id !== formData.subject_id) {
-        setFormData((prev) => ({ ...prev, subject_group_id: undefined }))
-      }
+    if (uploadMode !== 'group') return;
+    if (!formData.subject_group_id) return;
+    const g = allSubjectGroups.find((sg) => sg.id === formData.subject_group_id);
+    if (!g) return;
+    if (formData.grade_id !== g.grade_id || formData.subject_id !== g.subject_id) {
+      setFormData((prev) => ({
+        ...prev,
+        grade_id: g.grade_id,
+        subject_id: g.subject_id,
+        subgroup_id: undefined,
+      }));
     }
-  }, [formData.subject_id, formData.subject_group_id, subjectGroups])
+  }, [formData.subject_group_id, allSubjectGroups, uploadMode]);
 
   // Load teachers when subject (or grade) changes
   useEffect(() => {
@@ -173,7 +181,10 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
     try {
       // For teachers, grades come from their assignments
       if (userType === 'teacher') {
-        const gradesData = await api.getAllGrades();
+        const [gradesData, myGroups] = await Promise.all([
+          api.getAllGrades(),
+          api.getMySubjectGroups().catch(() => [] as SubjectGroup[]),
+        ]);
         // Filter grades based on teacher's assignments
         const assignedGradeIds = new Set(
           teacherAssignments
@@ -182,15 +193,18 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
         );
         const filteredGrades = gradesData.filter((g: any) => assignedGradeIds.has(g.id));
         setGrades(filteredGrades);
+        setAllSubjectGroups(myGroups);
       } else {
         // For admins, load all
-        const [gradesData, subjectsData] = await Promise.all([
+        const [gradesData, subjectsData, groupsData] = await Promise.all([
           api.getAllGrades(),
-          api.getAllSubjects()
+          api.getAllSubjects(),
+          api.getSubjectGroups().catch(() => [] as SubjectGroup[]),
         ]);
-        
+
         setGrades(gradesData);
         setSubjects(subjectsData);
+        setAllSubjectGroups(groupsData);
       }
     } catch (error) {
       console.error('Failed to load initial data:', error);
@@ -210,16 +224,6 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
     }
   };
 
-  const loadSubjectGroups = async (gradeId: number) => {
-    try {
-      const groups = await api.getSubjectGroupsByGrade(gradeId);
-      setSubjectGroups(groups);
-      setFormData(prev => ({ ...prev, subject_group_id: undefined }));
-    } catch {
-      setSubjectGroups([]);
-    }
-  };
-
   const handleInputChange = (field: keyof UploadFormData, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -234,9 +238,13 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
 
   const validateForm = (): string[] => {
     const errors: string[] = [];
-    
-    if (!formData.grade_id) errors.push('Выберите класс');
-    if (!formData.subject_id) errors.push('Выберите предмет');
+
+    if (uploadMode === 'group') {
+      if (!formData.subject_group_id) errors.push('Выберите предметную группу');
+    } else {
+      if (!formData.grade_id) errors.push('Выберите класс');
+      if (!formData.subject_id) errors.push('Выберите предмет');
+    }
     // Only check teacher name for admins (teachers have it auto-filled)
     if (userType === 'admin' && !formData.teacher_name.trim()) errors.push('Введите имя учителя');
     if (!formData.file) errors.push('Выберите файл Excel');
@@ -272,15 +280,23 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
         });
       }, 200);
 
-      const result = await api.uploadScores({
-        grade_id: formData.grade_id,
-        subject_id: formData.subject_id,
-        teacher_name: formData.teacher_name,
-        semester: formData.semester,
-        subgroup_id: formData.subgroup_id,
-        subject_group_id: formData.subject_group_id,
-        file: formData.file!
-      });
+      const result = await api.uploadScores(
+        uploadMode === 'group'
+          ? {
+              subject_group_id: formData.subject_group_id,
+              teacher_name: formData.teacher_name,
+              semester: formData.semester,
+              file: formData.file!,
+            }
+          : {
+              grade_id: formData.grade_id,
+              subject_id: formData.subject_id,
+              teacher_name: formData.teacher_name,
+              semester: formData.semester,
+              subgroup_id: formData.subgroup_id,
+              file: formData.file!,
+            }
+      );
 
       clearInterval(progressInterval);
       setUploadProgress(100);
@@ -314,7 +330,13 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
 
   const handleDownloadTemplate = async () => {
     try {
-      const blob = await api.downloadExcelTemplate();
+      const params: { grade_id?: number; subject_group_id?: number } = {};
+      if (uploadMode === 'group' && formData.subject_group_id) {
+        params.subject_group_id = formData.subject_group_id;
+      } else if (uploadMode === 'class' && formData.grade_id) {
+        params.grade_id = formData.grade_id;
+      }
+      const blob = await api.downloadExcelTemplate(params);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -331,6 +353,7 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
   };
 
   const resetForm = () => {
+    setUploadMode('class');
     setFormData({
       grade_id: 0,
       subject_id: 0,
@@ -408,136 +431,215 @@ export function UploadScores({ onUploadComplete, trigger }: UploadScoresProps) {
 
             {/* Upload Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Grade Selection */}
+              {/* Mode Toggle */}
+              {allSubjectGroups.length > 0 && (
                 <div className="space-y-2">
-                  <Label htmlFor="grade-select">Класс *</Label>
-                  <Select
-                    value={formData.grade_id.toString()}
-                    onValueChange={(value) => handleInputChange('grade_id', parseInt(value))}
-                  >
-                    <SelectTrigger id="grade-select">
-                      <SelectValue placeholder="Выберите класс" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {grades.map((grade) => (
-                        <SelectItem key={grade.id} value={grade.id.toString()}>
-                          {grade.grade} {grade.parallel} - {grade.curator_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Subject Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="subject-select">Предмет *</Label>
-                  <Select
-                    value={formData.subject_id.toString()}
-                    onValueChange={(value) => handleInputChange('subject_id', parseInt(value))}
-                  >
-                    <SelectTrigger id="subject-select">
-                      <SelectValue placeholder="Выберите предмет" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subjects.map((subject) => (
-                        <SelectItem key={subject.id} value={subject.id.toString()}>
-                          {subject.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Teacher Selection - Only for admins */}
-                {userType === 'admin' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="teacher-select">Имя учителя *</Label>
-                    <Select
-                      value={formData.teacher_name || ''}
-                      onValueChange={(value) => handleInputChange('teacher_name', value)}
-                      disabled={!formData.subject_id || loadingTeachers}
+                  <Label>Что загружаем?</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={uploadMode === 'class' ? 'default' : 'outline'}
+                      onClick={() => {
+                        setUploadMode('class');
+                        setFormData((prev) => ({
+                          ...prev,
+                          subject_group_id: undefined,
+                          grade_id: 0,
+                          subject_id: 0,
+                          subgroup_id: undefined,
+                        }));
+                      }}
                     >
-                      <SelectTrigger id="teacher-select">
-                        <SelectValue placeholder={loadingTeachers ? 'Загрузка...' : (teacherNames.length ? 'Выберите учителя' : 'Нет учителей для предмета')} />
+                      Оценки класса
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={uploadMode === 'group' ? 'default' : 'outline'}
+                      onClick={() => {
+                        setUploadMode('group');
+                        setFormData((prev) => ({
+                          ...prev,
+                          grade_id: 0,
+                          subject_id: 0,
+                          subgroup_id: undefined,
+                          subject_group_id: undefined,
+                        }));
+                        setSubgroups([]);
+                      }}
+                    >
+                      Оценки предметной группы
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {uploadMode === 'group' ? (
+                /* Group mode: only pick a subject group; grade/subject are derived */
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="subject-group-select">Предметная группа *</Label>
+                    <Select
+                      value={formData.subject_group_id?.toString() || ''}
+                      onValueChange={(value) => handleInputChange('subject_group_id', parseInt(value))}
+                    >
+                      <SelectTrigger id="subject-group-select">
+                        <SelectValue placeholder={allSubjectGroups.length ? 'Выберите предметную группу' : 'Нет доступных групп'} />
                       </SelectTrigger>
                       <SelectContent>
-                        {teacherNames.map((name) => (
-                          <SelectItem key={name} value={name}>
-                            {name}
+                        {allSubjectGroups.map((g) => (
+                          <SelectItem key={g.id} value={g.id.toString()}>
+                            {g.grade_name ? `${g.grade_name} — ` : ''}{g.subject_name} — {g.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                )}
 
-                {/* Quarter */}
-                <div className="space-y-2">
-                  <Label htmlFor="semester-select">Четверть</Label>
-                  <Select
-                    value={formData.semester.toString()}
-                    onValueChange={(value) => handleInputChange('semester', parseInt(value))}
-                  >
-                    <SelectTrigger id="semester-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">I четверть</SelectItem>
-                      <SelectItem value="2">II четверть</SelectItem>
-                      <SelectItem value="3">III четверть</SelectItem>
-                      <SelectItem value="4">IV четверть</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                  {userType === 'admin' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="teacher-select">Имя учителя *</Label>
+                      <Select
+                        value={formData.teacher_name || ''}
+                        onValueChange={(value) => handleInputChange('teacher_name', value)}
+                        disabled={!formData.subject_id || loadingTeachers}
+                      >
+                        <SelectTrigger id="teacher-select">
+                          <SelectValue placeholder={loadingTeachers ? 'Загрузка...' : (teacherNames.length ? 'Выберите учителя' : 'Нет учителей для предмета')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {teacherNames.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              {name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
-              {/* Subgroup Selection (optional) */}
-              {subgroups.length > 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="subgroup-select">Подгруппа (опционально)</Label>
-                  <Select
-                    value={formData.subgroup_id?.toString() || '__none__'}
-                    onValueChange={(value) => handleInputChange('subgroup_id', value !== '__none__' ? parseInt(value) : undefined)}
-                  >
-                    <SelectTrigger id="subgroup-select">
-                      <SelectValue placeholder="Выберите подгруппу или оставьте пустым" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Без подгруппы</SelectItem>
-                      {subgroups.map((subgroup) => (
-                        <SelectItem key={subgroup.id} value={subgroup.id.toString()}>
-                          {subgroup.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Label htmlFor="semester-select">Четверть</Label>
+                    <Select
+                      value={formData.semester.toString()}
+                      onValueChange={(value) => handleInputChange('semester', parseInt(value))}
+                    >
+                      <SelectTrigger id="semester-select">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">I четверть</SelectItem>
+                        <SelectItem value="2">II четверть</SelectItem>
+                        <SelectItem value="3">III четверть</SelectItem>
+                        <SelectItem value="4">IV четверть</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              )}
+              ) : (
+                /* Class mode: grade + subject (+ optional subgroup) */
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="grade-select">Класс *</Label>
+                      <Select
+                        value={formData.grade_id.toString()}
+                        onValueChange={(value) => handleInputChange('grade_id', parseInt(value))}
+                      >
+                        <SelectTrigger id="grade-select">
+                          <SelectValue placeholder="Выберите класс" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {grades.map((grade) => (
+                            <SelectItem key={grade.id} value={grade.id.toString()}>
+                              {grade.grade} {grade.parallel} - {grade.curator_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-              {/* Subject Group Selection (11-12 grades only) */}
-              {subjectGroups.length > 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="subject-group-select">Предметная группа (11–12 класс)</Label>
-                  <Select
-                    value={formData.subject_group_id?.toString() || '__none__'}
-                    onValueChange={(value) => handleInputChange('subject_group_id', value !== '__none__' ? parseInt(value) : undefined)}
-                  >
-                    <SelectTrigger id="subject-group-select">
-                      <SelectValue placeholder="Выберите группу или оставьте пустым" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Без группы</SelectItem>
-                      {subjectGroups
-                        .filter((g) => !formData.subject_id || g.subject_id === formData.subject_id)
-                        .map((g) => (
-                          <SelectItem key={g.id} value={g.id.toString()}>
-                            {g.subject_name} — {g.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="subject-select">Предмет *</Label>
+                      <Select
+                        value={formData.subject_id.toString()}
+                        onValueChange={(value) => handleInputChange('subject_id', parseInt(value))}
+                      >
+                        <SelectTrigger id="subject-select">
+                          <SelectValue placeholder="Выберите предмет" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subjects.map((subject) => (
+                            <SelectItem key={subject.id} value={subject.id.toString()}>
+                              {subject.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {userType === 'admin' && (
+                      <div className="space-y-2">
+                        <Label htmlFor="teacher-select">Имя учителя *</Label>
+                        <Select
+                          value={formData.teacher_name || ''}
+                          onValueChange={(value) => handleInputChange('teacher_name', value)}
+                          disabled={!formData.subject_id || loadingTeachers}
+                        >
+                          <SelectTrigger id="teacher-select">
+                            <SelectValue placeholder={loadingTeachers ? 'Загрузка...' : (teacherNames.length ? 'Выберите учителя' : 'Нет учителей для предмета')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {teacherNames.map((name) => (
+                              <SelectItem key={name} value={name}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="semester-select">Четверть</Label>
+                      <Select
+                        value={formData.semester.toString()}
+                        onValueChange={(value) => handleInputChange('semester', parseInt(value))}
+                      >
+                        <SelectTrigger id="semester-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">I четверть</SelectItem>
+                          <SelectItem value="2">II четверть</SelectItem>
+                          <SelectItem value="3">III четверть</SelectItem>
+                          <SelectItem value="4">IV четверть</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {subgroups.length > 0 && (
+                    <div className="space-y-2">
+                      <Label htmlFor="subgroup-select">Подгруппа (опционально)</Label>
+                      <Select
+                        value={formData.subgroup_id?.toString() || '__none__'}
+                        onValueChange={(value) => handleInputChange('subgroup_id', value !== '__none__' ? parseInt(value) : undefined)}
+                      >
+                        <SelectTrigger id="subgroup-select">
+                          <SelectValue placeholder="Выберите подгруппу или оставьте пустым" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Без подгруппы</SelectItem>
+                          {subgroups.map((subgroup) => (
+                            <SelectItem key={subgroup.id} value={subgroup.id.toString()}>
+                              {subgroup.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* File Upload */}
