@@ -56,6 +56,7 @@ function TeacherDashboardContent() {
   const [uploadPrefill, setUploadPrefill] = useState<{
     gradeId?: number;
     subjectId?: number;
+    subjectGroupId?: number;
   }>({});
   const [currentUser, setCurrentUser] = useState<{
     type?: string;
@@ -123,8 +124,8 @@ function TeacherDashboardContent() {
     }
   };
 
-  const handleOpenExcelUpload = (gradeId?: number, subjectId?: number) => {
-    setUploadPrefill({ gradeId, subjectId });
+  const handleOpenExcelUpload = (gradeId?: number, subjectId?: number, subjectGroupId?: number) => {
+    setUploadPrefill({ gradeId, subjectId, subjectGroupId });
     setUploadOpen(true);
   };
 
@@ -465,7 +466,12 @@ function TeacherDashboardContent() {
 
           {showSubjectGroupsTab && (
             <TabsContent value="subject-groups" className="mt-0 focus-visible:outline-none">
-              <TeacherSubjectGroupsPanel embedded />
+              <TeacherSubjectGroupsPanel
+                embedded
+                onOpenExcelUpload={(subjectGroupId, subjectId) =>
+                  handleOpenExcelUpload(undefined, subjectId, subjectGroupId)
+                }
+              />
             </TabsContent>
           )}
         </Tabs>
@@ -476,6 +482,7 @@ function TeacherDashboardContent() {
         onOpenChange={handleUploadOpenChange}
         initialGradeId={uploadPrefill.gradeId}
         initialSubjectId={uploadPrefill.subjectId}
+        initialSubjectGroupId={uploadPrefill.subjectGroupId}
         onUploadComplete={() => {
           fetchData();
         }}

@@ -30,6 +30,7 @@ interface UploadScoresProps {
   initialGradeId?: number;
   initialSubjectId?: number;
   initialSemester?: number;
+  initialSubjectGroupId?: number;
 }
 
 interface UploadFormData {
@@ -63,7 +64,8 @@ export function UploadScores({
   onOpenChange,
   initialGradeId,
   initialSubjectId,
-  initialSemester
+  initialSemester,
+  initialSubjectGroupId,
 }: UploadScoresProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = openControlled !== undefined;
@@ -79,6 +81,7 @@ export function UploadScores({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userType, setUserType] = useState<string>('admin');
+  const [uploadMode, setUploadMode] = useState<'class' | 'group'>('class');
   
   // Form data
   const [formData, setFormData] = useState<UploadFormData>({
@@ -142,14 +145,28 @@ export function UploadScores({
 
   /** Подставляем класс/предмет с родителя после загрузки справочников — иначе селекты пустые */
   useEffect(() => {
-    if (!dialogOpen || loading) return;
-    setFormData((prev) => ({
-      ...prev,
-      ...(initialGradeId != null && initialGradeId > 0 ? { grade_id: initialGradeId } : {}),
-      ...(initialSubjectId != null && initialSubjectId > 0 ? { subject_id: initialSubjectId } : {}),
-      ...(initialSemester != null ? { semester: initialSemester } : {})
-    }));
-  }, [dialogOpen, loading, initialGradeId, initialSubjectId, initialSemester]);
+    if (!dialogOpen || loading) return
+
+    if (initialSubjectGroupId != null) {
+      // Pre-select group mode
+      setUploadMode('group')
+      setFormData((prev) => ({
+        ...prev,
+        subject_group_id: initialSubjectGroupId,
+        grade_id: 0,
+        ...(initialSubjectId != null && initialSubjectId > 0 ? { subject_id: initialSubjectId } : {}),
+        ...(initialSemester != null ? { semester: initialSemester } : {}),
+      }))
+    } else {
+      setUploadMode('class')
+      setFormData((prev) => ({
+        ...prev,
+        ...(initialGradeId != null && initialGradeId > 0 ? { grade_id: initialGradeId } : {}),
+        ...(initialSubjectId != null && initialSubjectId > 0 ? { subject_id: initialSubjectId } : {}),
+        ...(initialSemester != null ? { semester: initialSemester } : {}),
+      }))
+    }
+  }, [dialogOpen, loading, initialGradeId, initialSubjectId, initialSemester, initialSubjectGroupId])
 
   // Load subgroups when grade changes
   useEffect(() => {
@@ -161,9 +178,21 @@ export function UploadScores({
     } else {
       setSubgroups([]);
       if (userType !== 'teacher') {
+        // Admin: reset loaded groups since they're per-grade
         setSubjectGroups([]);
       }
-      setFormData(prev => ({ ...prev, subgroup_id: undefined, subject_group_id: undefined }));
+      // Don't wipe subject_group_id when a classless group was just selected
+      // (selecting such a group legitimately sets grade_id to 0).
+      setFormData(prev => {
+        const picked = prev.subject_group_id
+        const pickedGroup = picked ? subjectGroups.find((g) => g.id === picked) : undefined
+        const isClasslessGroupSelected = Boolean(pickedGroup && pickedGroup.grade_id == null)
+        return {
+          ...prev,
+          subgroup_id: undefined,
+          subject_group_id: isClasslessGroupSelected ? prev.subject_group_id : undefined,
+        }
+      });
     }
   }, [formData.grade_id, userType]);
 
@@ -220,6 +249,7 @@ export function UploadScores({
           api.getAllGrades(),
           api.getMySubjectGroups().catch(() => [])
         ]);
+        console.log('Loaded teacher subject groups:', teacherGroups);
         // Filter grades based on teacher's assignments
         const assignedGradeIds = new Set(
           teacherAssignments
@@ -229,6 +259,7 @@ export function UploadScores({
         const filteredGrades = gradesData.filter((g: any) => assignedGradeIds.has(g.id));
         setGrades(filteredGrades);
         setSubjectGroups(teacherGroups as SubjectGroup[]);
+        // Don't overwrite subjects for teachers - they're loaded from assignments already
       } else {
         // For admins, load all
         const [gradesData, subjectsData] = await Promise.all([
@@ -280,19 +311,24 @@ export function UploadScores({
   };
 
   const validateForm = (): string[] => {
-    const errors: string[] = [];
-    
-    if (!formData.grade_id && !formData.subject_group_id) errors.push('Выберите класс или предметную группу');
-    if (!formData.subject_id) errors.push('Выберите предмет');
-    // Only check teacher name for admins (teachers have it auto-filled)
-    if (userType === 'admin' && !formData.teacher_name.trim()) errors.push('Введите имя учителя');
-    if (!formData.file) errors.push('Выберите файл Excel');
-    if (formData.file && !formData.file.name.match(/\.(xlsx|xls)$/i)) {
-      errors.push('Файл должен быть в формате Excel (.xlsx или .xls)');
+    const errors: string[] = []
+
+    if (!formData.subject_id) errors.push('Выберите предмет')
+    if (userType === 'admin' && !formData.teacher_name.trim()) errors.push('Введите имя учителя')
+
+    if (uploadMode === 'class') {
+      if (!formData.grade_id) errors.push('Выберите класс')
+    } else {
+      if (!formData.subject_group_id) errors.push('Выберите предметную группу')
     }
 
-    return errors;
-  };
+    if (!formData.file) errors.push('Выберите файл Excel')
+    if (formData.file && !formData.file.name.match(/\.(xlsx|xls)$/i)) {
+      errors.push('Файл должен быть в формате Excel (.xlsx или .xls)')
+    }
+
+    return errors
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -363,22 +399,45 @@ export function UploadScores({
   };
 
   const handleDownloadTemplate = async () => {
+    const hasClass = uploadMode === 'class' && formData.grade_id > 0
+    const hasGroup = uploadMode === 'group' && !!formData.subject_group_id
+
     try {
-      const blob = await api.downloadExcelTemplate();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'grades_template.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success('Шаблон загружен');
+      const blob = await api.downloadExcelTemplate(
+        hasGroup
+          ? { subject_group_id: formData.subject_group_id }
+          : hasClass
+          ? { grade_id: formData.grade_id }
+          : undefined
+      )
+
+      const selectedGroup = subjectGroups.find(g => g.id === formData.subject_group_id)
+      const selectedGradeObj = grades.find(g => g.id === formData.grade_id)
+      const filename = hasGroup
+        ? `template_${selectedGroup?.name ?? 'group'}.xlsx`
+        : hasClass
+        ? `template_${selectedGradeObj?.grade ?? 'class'}.xlsx`
+        : 'grades_template.xlsx'
+
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      if (hasClass || hasGroup) {
+        toast.success('Шаблон с учениками загружен')
+      } else {
+        toast.success('Шаблон загружен')
+      }
     } catch (error) {
-      console.error('Failed to download template:', error);
-      toast.error('Не удалось скачать шаблон');
+      console.error('Failed to download template:', error)
+      toast.error('Не удалось скачать шаблон')
     }
-  };
+  }
 
   const resetForm = () => {
     const teacherName =
@@ -392,6 +451,7 @@ export function UploadScores({
       subject_group_id: undefined,
       file: null
     });
+    setUploadMode('class');
     setUploadResult(null);
     setUploadProgress(0);
 
@@ -481,11 +541,23 @@ export function UploadScores({
                 <CardTitle className="text-sm font-medium">Шаблон Excel</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <p className="text-sm text-muted-foreground">
-                    Скачайте шаблон с правильной структурой колонок
+                    {uploadMode === 'class' && formData.grade_id > 0
+                      ? `Шаблон будет заполнен учениками класса ${grades.find(g => g.id === formData.grade_id)?.grade ?? ''}`
+                      : uploadMode === 'group' && formData.subject_group_id
+                      ? `Шаблон будет заполнен учениками группы «${subjectGroups.find(g => g.id === formData.subject_group_id)?.name ?? ''}»`
+                      : 'Сначала выберите класс или группу — шаблон заполнится именами учеников'}
                   </p>
-                  <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadTemplate}
+                    disabled={
+                      (uploadMode === 'class' && !formData.grade_id) ||
+                      (uploadMode === 'group' && !formData.subject_group_id)
+                    }
+                  >
                     <Download className="h-4 w-4 mr-2" />
                     Скачать шаблон
                   </Button>
@@ -494,33 +566,46 @@ export function UploadScores({
             </Card>
 
             {/* Upload Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Grade Selection */}
-                <div className="space-y-2">
-                  <Label htmlFor="grade-select">Класс *</Label>
-                  <Select
-                    value={formData.grade_id.toString()}
-                    onValueChange={(value) => handleInputChange('grade_id', parseInt(value))}
-                  >
-                    <SelectTrigger id="grade-select">
-                      <SelectValue placeholder="Выберите класс" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {grades.map((grade) => (
-                        <SelectItem key={grade.id} value={grade.id.toString()}>
-                          {grade.grade} {grade.parallel} - {grade.curator_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <form onSubmit={handleSubmit} className="space-y-5">
 
-                {/* Subject Selection */}
+              {/* ── Mode toggle ─────────────────────────────────────── */}
+              <div className="grid grid-cols-2 gap-2 rounded-lg border p-1 bg-muted/40">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadMode('class')
+                    setFormData(prev => ({ ...prev, subject_group_id: undefined }))
+                  }}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    uploadMode === 'class'
+                      ? 'bg-background shadow text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  По классу
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadMode('group')
+                    setFormData(prev => ({ ...prev, grade_id: 0, subgroup_id: undefined }))
+                  }}
+                  className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    uploadMode === 'group'
+                      ? 'bg-background shadow text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  По предметной группе
+                </button>
+              </div>
+
+              {/* ── Shared: subject + quarter + teacher ─────────────── */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="subject-select">Предмет *</Label>
                   <Select
-                    value={formData.subject_id.toString()}
+                    value={formData.subject_id > 0 ? formData.subject_id.toString() : ''}
                     onValueChange={(value) => handleInputChange('subject_id', parseInt(value))}
                   >
                     <SelectTrigger id="subject-select">
@@ -536,9 +621,24 @@ export function UploadScores({
                   </Select>
                 </div>
 
-                {/* Teacher Selection - Only for admins */}
+                <div className="space-y-2">
+                  <Label htmlFor="semester-select">Четверть *</Label>
+                  <Select
+                    value={formData.semester.toString()}
+                    onValueChange={(value) => handleInputChange('semester', parseInt(value))}
+                  >
+                    <SelectTrigger id="semester-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">I четверть</SelectItem>
+                      <SelectItem value="2">II четверть</SelectItem>
+                      <SelectItem value="3">III четверть</SelectItem>
+                      <SelectItem value="4">IV четверть</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {userType === 'admin' && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="teacher-select">Имя учителя *</Label>
                     <Select
                       value={formData.teacher_name || ''}
@@ -550,89 +650,123 @@ export function UploadScores({
                       </SelectTrigger>
                       <SelectContent>
                         {teacherNames.map((name) => (
-                          <SelectItem key={name} value={name}>
-                            {name}
-                          </SelectItem>
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 )}
-
-                {/* Quarter */}
-                <div className="space-y-2">
-                  <Label htmlFor="semester-select">Четверть</Label>
-                  <Select
-                    value={formData.semester.toString()}
-                    onValueChange={(value) => handleInputChange('semester', parseInt(value))}
-                  >
-                    <SelectTrigger id="semester-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">I четверть</SelectItem>
-                      <SelectItem value="2">II четверть</SelectItem>
-                      <SelectItem value="3">III четверть</SelectItem>
-                      <SelectItem value="4">IV четверть</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
 
-              {/* Subgroup Selection (optional) */}
-              {subgroups.length > 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="subgroup-select">Подгруппа (опционально)</Label>
-                  <Select
-                    value={formData.subgroup_id?.toString() || '__none__'}
-                    onValueChange={(value) => handleInputChange('subgroup_id', value !== '__none__' ? parseInt(value) : undefined)}
-                  >
-                    <SelectTrigger id="subgroup-select">
-                      <SelectValue placeholder="Выберите подгруппу или оставьте пустым" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Без подгруппы</SelectItem>
-                      {subgroups.map((subgroup) => (
-                        <SelectItem key={subgroup.id} value={subgroup.id.toString()}>
-                          {subgroup.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* ── Mode: По классу ──────────────────────────────────── */}
+              {uploadMode === 'class' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="grade-select">Класс *</Label>
+                    <Select
+                      value={formData.grade_id > 0 ? formData.grade_id.toString() : ''}
+                      onValueChange={(value) => handleInputChange('grade_id', parseInt(value))}
+                    >
+                      <SelectTrigger id="grade-select">
+                        <SelectValue placeholder="Выберите класс" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {grades.map((grade) => {
+                          const gradeLabel = grade.parallel && !grade.grade.includes(grade.parallel)
+                            ? `${grade.grade}${grade.parallel}`
+                            : grade.grade
+                          return (
+                            <SelectItem key={grade.id} value={grade.id.toString()}>
+                              {gradeLabel}{grade.curator_name ? ` — ${grade.curator_name}` : ''}
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {subgroups.length > 0 && (
+                    <div className="space-y-2">
+                      <Label htmlFor="subgroup-select">Подгруппа <span className="text-muted-foreground">(если класс делится)</span></Label>
+                      <Select
+                        value={formData.subgroup_id?.toString() || '__none__'}
+                        onValueChange={(v) => handleInputChange('subgroup_id', v !== '__none__' ? parseInt(v) : undefined)}
+                      >
+                        <SelectTrigger id="subgroup-select">
+                          <SelectValue placeholder="Вся параллель" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Весь класс</SelectItem>
+                          {subgroups.map((sg) => (
+                            <SelectItem key={sg.id} value={sg.id.toString()}>{sg.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Subject Group Selection (11-12 grades only) */}
-              {subjectGroups.length > 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="subject-group-select">Предметная группа (11–12 класс)</Label>
-                  <Select
-                    value={formData.subject_group_id?.toString() || '__none__'}
-                    onValueChange={(value) => {
-                      const nextGroupId = value !== '__none__' ? parseInt(value) : undefined
-                      const nextGroup = subjectGroups.find((g) => g.id === nextGroupId)
-                      setFormData((prev) => ({
-                        ...prev,
-                        subject_group_id: nextGroupId,
-                        // Группа выступает как "виртуальный класс": подставляем её якорный класс для upload API
-                        grade_id: nextGroup?.grade_id ?? prev.grade_id,
-                      }))
-                    }}
-                  >
-                    <SelectTrigger id="subject-group-select">
-                      <SelectValue placeholder="Выберите группу или оставьте пустым" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Без группы</SelectItem>
-                      {subjectGroups
-                        .filter((g) => !formData.subject_id || g.subject_id === formData.subject_id)
-                        .map((g) => (
-                          <SelectItem key={g.id} value={g.id.toString()}>
-                            {g.subject_name} — {g.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+              {/* ── Mode: По группе ──────────────────────────────────── */}
+              {uploadMode === 'group' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Предметная группа *</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 text-xs"
+                      onClick={async () => {
+                        try {
+                          const groups = await api.getMySubjectGroups()
+                          setSubjectGroups(groups as SubjectGroup[])
+                          toast.success(`Обновлено: ${(groups as any[]).length} групп`)
+                        } catch {
+                          toast.error('Не удалось обновить группы')
+                        }
+                      }}
+                    >
+                      Обновить список
+                    </Button>
+                  </div>
+
+                  {subjectGroups.length === 0 ? (
+                    <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 space-y-1">
+                      <p className="font-medium">Нет предметных групп</p>
+                      <p className="text-xs">Создайте группу на вкладке <strong>«Предметные группы»</strong> панели учителя, затем нажмите «Обновить список».</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Select
+                        value={formData.subject_group_id?.toString() || ''}
+                        onValueChange={(value) => {
+                          const nextGroupId = parseInt(value)
+                          const nextGroup = subjectGroups.find((g) => g.id === nextGroupId)
+                          setFormData((prev) => ({
+                            ...prev,
+                            subject_group_id: nextGroupId,
+                            grade_id: nextGroup?.grade_id ?? 0,
+                          }))
+                        }}
+                      >
+                        <SelectTrigger id="subject-group-select">
+                          <SelectValue placeholder="Выберите группу" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subjectGroups.map((g) => (
+                            <SelectItem key={g.id} value={g.id.toString()}>
+                              <span className="font-medium">{g.name}</span>
+                              <span className="ml-2 text-muted-foreground text-xs">
+                                {g.subject_name}{g.grade_name ? ` · ${g.grade_name}` : ' · несколько классов'}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                    </div>
+                  )}
                 </div>
               )}
 

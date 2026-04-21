@@ -34,6 +34,11 @@ interface GradeOption {
   parallel: string
 }
 
+const parseParallel = (g: GradeOption): number => {
+  const num = parseInt(g.grade, 10)
+  return Number.isFinite(num) ? num : NaN
+}
+
 export function SubjectGroupsManager() {
   const [grades, setGrades] = useState<GradeOption[]>([])
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -42,9 +47,9 @@ export function SubjectGroupsManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ grade_id: 0, subject_id: 0, name: '' })
 
-  const grades11_12 = grades.filter((g) => {
-    const num = parseInt(g.grade, 10)
-    return num === 11 || num === 12
+  const eligibleGrades = grades.filter((g) => {
+    const p = parseParallel(g)
+    return p >= 7 && p <= 12
   })
 
   useEffect(() => {
@@ -100,10 +105,19 @@ export function SubjectGroupsManager() {
     }
   }
 
-  const electiveSubjectsFiltered = subjects.filter((s) =>
+  const selectedGrade = eligibleGrades.find((g) => g.id === createForm.grade_id)
+  const selectedParallel = selectedGrade ? parseParallel(selectedGrade) : NaN
+  const isSenior = selectedParallel === 11 || selectedParallel === 12
+
+  // 11-12: elective subjects only unless subject.allows_subject_groups explicitly includes more.
+  // 7-10: any subject with allows_subject_groups enabled (in-class subject subgroups).
+  const subjectsForGroupFlag = subjects.filter((s) => (s as any).allows_subject_groups)
+  const electiveSubjectsFiltered = subjectsForGroupFlag.filter((s) =>
     ELECTIVE_SUBJECTS.some((e) => s.name.toLowerCase().includes(e.toLowerCase()))
   )
-  const allSubjectsForSelect = electiveSubjectsFiltered.length > 0 ? electiveSubjectsFiltered : subjects
+  const allSubjectsForSelect = isSenior
+    ? (electiveSubjectsFiltered.length > 0 ? electiveSubjectsFiltered : subjectsForGroupFlag)
+    : subjectsForGroupFlag
 
   if (loading) {
     return (
@@ -117,15 +131,16 @@ export function SubjectGroupsManager() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Предметные группы (11–12 классы)</CardTitle>
+          <CardTitle>Предметные группы (7–12 классы)</CardTitle>
           <CardDescription>
-            Физика, химия, биология, география, ГиП, информатика — деление по группам для старших классов
+            7–10: деление класса на подгруппы по предмету (например, казахский язык — 2 подгруппы, 2 учителя).
+            11–12: элективные группы (физика, химия, биология, география, ГиП, информатика).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {grades11_12.length === 0 ? (
+          {eligibleGrades.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              Нет классов 11 или 12. Создайте классы в разделе «Классы».
+              Нет подходящих классов (7–12). Создайте классы в разделе «Классы».
             </p>
           ) : (
             <>
@@ -141,7 +156,7 @@ export function SubjectGroupsManager() {
               <div className="border rounded-lg divide-y">
                 {groups.length === 0 ? (
                   <div className="p-6 text-center text-muted-foreground text-sm">
-                    Предметные группы не созданы. Добавьте группы для классов 11–12.
+                    Предметные группы не созданы. Добавьте группы для классов 7–12.
                   </div>
                 ) : (
                   groups.map((g) => (
@@ -171,7 +186,7 @@ export function SubjectGroupsManager() {
           <DialogHeader>
             <DialogTitle>Создать предметную группу</DialogTitle>
             <DialogDescription>
-              Только для 11 и 12 классов
+              Для 7–10: деление одного класса на подгруппы по предмету. Для 11–12: элективные группы.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -179,13 +194,13 @@ export function SubjectGroupsManager() {
               <Label>Класс</Label>
               <Select
                 value={createForm.grade_id?.toString() || ''}
-                onValueChange={(v) => setCreateForm((p) => ({ ...p, grade_id: parseInt(v, 10) }))}
+                onValueChange={(v) => setCreateForm((p) => ({ ...p, grade_id: parseInt(v, 10), subject_id: 0 }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Выберите класс" />
                 </SelectTrigger>
                 <SelectContent>
-                  {grades11_12.map((gr) => (
+                  {eligibleGrades.map((gr) => (
                     <SelectItem key={gr.id} value={gr.id.toString()}>
                       {gr.grade}{gr.parallel}
                     </SelectItem>

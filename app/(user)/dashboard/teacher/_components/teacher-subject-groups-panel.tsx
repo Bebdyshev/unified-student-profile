@@ -32,7 +32,7 @@ import type {
   SubjectGroupMemberRow,
   SubjectGroupParallelStudent
 } from '@/types'
-import { Loader2, Plus, Trash2, UserPlus } from 'lucide-react'
+import { Loader2, Plus, Trash2, Upload, UserPlus } from 'lucide-react'
 import type { TeacherAssignmentRow as LibTeacherAssignmentRow } from '@/lib/teacher-assignments'
 
 interface TeacherAssignmentRow {
@@ -59,13 +59,9 @@ const parallelFromGradeLabel = (name: string | null | undefined): number | null 
   return null
 }
 
-const letterFromGradeLabel = (name: string | null | undefined): string => {
-  if (!name) return ''
-  const t = String(name).trim()
-  const m = t.match(/^(\d{1,2})\s*([A-Za-zА-Яа-яЁёІіҢңҒғҚқӨөҰұҮүҺһ]?)/)
-  if (m && m[2]) return m[2].toUpperCase()
-  const tail = t.replace(/^\d{1,2}\s*/, '').trim()
-  return tail ? tail.charAt(0).toUpperCase() : ''
+const classLabelFromCandidate = (gradeName: string | null | undefined): string => {
+  const v = (gradeName || '').trim()
+  return v || 'Не указан класс'
 }
 
 type AccessBlock = 'none' | 'not-teacher' | 'no-subject-groups-flag'
@@ -73,9 +69,14 @@ type AccessBlock = 'none' | 'not-teacher' | 'no-subject-groups-flag'
 export type TeacherSubjectGroupsPanelProps = {
   /** Вкладка на панели учителя: без редиректов, только текст */
   embedded?: boolean
+  /** Called when the user clicks the Excel upload button on a group card */
+  onOpenExcelUpload?: (subjectGroupId: number, subjectId: number) => void
 }
 
-export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGroupsPanelProps) => {
+export const TeacherSubjectGroupsPanel = ({
+  embedded = false,
+  onOpenExcelUpload,
+}: TeacherSubjectGroupsPanelProps) => {
   const router = useRouter()
   const [groups, setGroups] = useState<SubjectGroup[]>([])
   const [assignments, setAssignments] = useState<TeacherAssignmentRow[]>([])
@@ -90,7 +91,7 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
   const [createName, setCreateName] = useState('')
   const [savingMembers, setSavingMembers] = useState(false)
   const [search, setSearch] = useState('')
-  const [letterFilter, setLetterFilter] = useState<string>('all')
+  const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set())
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set())
   const nextGroupNameForSubject = useCallback((subjectId: number) => {
     const regex = /^Group #(\d+)$/
@@ -263,6 +264,8 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
   const loadGroupDetail = useCallback(async (groupId: number) => {
     setDetailLoading(true)
     setSelectedToAdd(new Set())
+    setSelectedClasses(new Set())
+    setSearch('')
     try {
       const [mrows, pool] = await Promise.all([
         api.getSubjectGroupMembers(groupId),
@@ -289,27 +292,46 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
 
   const memberIdSet = useMemo(() => new Set(members.map((m) => m.student_id)), [members])
 
-  const letterOptions = useMemo(() => {
-    const letters = new Set<string>()
+  const classOptions = useMemo(() => {
+    const classes = new Set<string>()
     for (const c of candidates) {
-      const L = letterFromGradeLabel(c.grade_name)
-      if (L) letters.add(L)
+      if (memberIdSet.has(c.id)) continue
+      classes.add(classLabelFromCandidate(c.grade_name))
     }
-    return Array.from(letters).sort()
-  }, [candidates])
+    return Array.from(classes).sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [candidates, memberIdSet])
 
   const filteredCandidates = useMemo(() => {
+    if (selectedClasses.size === 0) return []
     const q = search.trim().toLowerCase()
     return candidates.filter((c) => {
       if (memberIdSet.has(c.id)) return false
-      if (letterFilter !== 'all') {
-        const L = letterFromGradeLabel(c.grade_name)
-        if (L !== letterFilter) return false
-      }
+      const classLabel = classLabelFromCandidate(c.grade_name)
+      if (!selectedClasses.has(classLabel)) return false
       if (q && !(c.name || '').toLowerCase().includes(q)) return false
       return true
     })
-  }, [candidates, memberIdSet, search, letterFilter])
+  }, [candidates, memberIdSet, search, selectedClasses])
+
+  const toggleClassSelection = (classLabel: string, checked: boolean) => {
+    setSelectedClasses((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(classLabel)
+      else next.delete(classLabel)
+      return next
+    })
+    setSelectedToAdd(new Set())
+  }
+
+  const handleSelectAllClasses = (checked: boolean) => {
+    if (!checked) {
+      setSelectedClasses(new Set())
+      setSelectedToAdd(new Set())
+      return
+    }
+    setSelectedClasses(new Set(classOptions))
+    setSelectedToAdd(new Set())
+  }
 
   const handleOpenCreate = () => {
     if (subjectOptions.length > 0) {
@@ -469,18 +491,33 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
               <ul className="space-y-2">
                 {groups.map((g) => (
                   <li key={g.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedGroupId(g.id)}
-                      className={`flex w-full flex-col rounded-lg border p-3 text-left transition-colors hover:bg-muted/60 ${
+                    <div
+                      className={`flex w-full items-center rounded-lg border transition-colors ${
                         selectedGroupId === g.id ? 'border-primary bg-muted/40' : 'border-border'
                       }`}
                     >
-                      <span className="font-medium">{g.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {g.subject_name ?? `Предмет #${g.subject_id}`} · {g.grade_name ?? `Класс #${g.grade_id}`}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGroupId(g.id)}
+                        className="flex min-w-0 flex-1 flex-col p-3 text-left"
+                      >
+                        <span className="font-medium">{g.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {g.subject_name ?? `Предмет #${g.subject_id}`} · {g.grade_name ?? 'Межклассная группа'}
+                        </span>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="mr-2 h-8 shrink-0 gap-1 text-xs"
+                        title="Загрузить оценки группы из Excel"
+                        onClick={() => onOpenExcelUpload?.(g.id, g.subject_id)}
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Excel
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -554,9 +591,43 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
                 </div>
 
                 <div className="space-y-3 border-t pt-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="sg-select-all-classes"
+                        checked={classOptions.length > 0 && selectedClasses.size === classOptions.length}
+                        onCheckedChange={(v) => handleSelectAllClasses(v === true)}
+                        aria-label="Выбрать все классы"
+                      />
+                      <Label htmlFor="sg-select-all-classes" className="text-sm font-medium">
+                        1) Выберите классы ({selectedClasses.size} из {classOptions.length})
+                      </Label>
+                    </div>
+                    {classOptions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Нет доступных классов для добавления учеников.
+                      </p>
+                    ) : (
+                      <div className="max-h-28 overflow-y-auto rounded-md border p-2">
+                        <div className="flex flex-wrap gap-3">
+                          {classOptions.map((className) => (
+                            <label key={className} className="inline-flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={selectedClasses.has(className)}
+                                onCheckedChange={(v) => toggleClassSelection(className, v === true)}
+                                aria-label={`Выбрать класс ${className}`}
+                              />
+                              <span>{className}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="min-w-[180px] flex-1 space-y-2">
-                      <Label htmlFor="sg-search">Поиск по ФИО</Label>
+                      <Label htmlFor="sg-search">2) Поиск ученика по ФИО</Label>
                       <Input
                         id="sg-search"
                         value={search}
@@ -565,22 +636,6 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
                         autoComplete="off"
                       />
                     </div>
-                    <div className="w-full min-w-[140px] max-w-[200px] space-y-2">
-                      <Label>Литера класса</Label>
-                      <Select value={letterFilter} onValueChange={setLetterFilter}>
-                        <SelectTrigger aria-label="Фильтр по литере">
-                          <SelectValue placeholder="Все" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Все литеры</SelectItem>
-                          {letterOptions.map((L) => (
-                            <SelectItem key={L} value={L}>
-                              {L}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -588,6 +643,7 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
                       <Checkbox
                         id="sg-select-all"
                         checked={
+                          selectedClasses.size > 0 &&
                           filteredCandidates.length > 0 &&
                           filteredCandidates.every((c) => selectedToAdd.has(c.id))
                         }
@@ -600,7 +656,7 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
                     </div>
                     <Button
                       type="button"
-                      disabled={selectedToAdd.size === 0 || savingMembers}
+                      disabled={selectedClasses.size === 0 || selectedToAdd.size === 0 || savingMembers}
                       onClick={handleAddSelected}
                       className="gap-2"
                     >
@@ -618,7 +674,11 @@ export const TeacherSubjectGroupsPanel = ({ embedded = false }: TeacherSubjectGr
                     role="list"
                     aria-label="Ученики для добавления в группу"
                   >
-                    {filteredCandidates.length === 0 ? (
+                    {selectedClasses.size === 0 ? (
+                      <li className="px-2 py-4 text-center text-sm text-muted-foreground">
+                        Сначала выберите хотя бы один класс, затем отметьте учеников.
+                      </li>
+                    ) : filteredCandidates.length === 0 ? (
                       <li className="px-2 py-4 text-center text-sm text-muted-foreground">
                         Нет учеников по фильтру или все уже в группе.
                       </li>
