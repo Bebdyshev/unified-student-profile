@@ -1525,6 +1525,34 @@ class ApiService {
       throw handleApiError(error);
     }
   }
+
+  // Admin: Invalid students management
+  async getInvalidStudents(): Promise<any> {
+    try {
+      const response = await apiClient.get('/grades/admin/invalid-students');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async deleteInvalidStudents(): Promise<any> {
+    try {
+      const response = await apiClient.delete('/grades/admin/invalid-students');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
+
+  async recalculateAllPredictions(): Promise<any> {
+    try {
+      const response = await apiClient.post('/grades/admin/recalculate-predictions');
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  }
 }
 
 // Create and export a singleton instance
