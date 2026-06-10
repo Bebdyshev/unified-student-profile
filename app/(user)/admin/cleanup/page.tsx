@@ -14,17 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'react-toastify';
 import api from '@/lib/api';
@@ -88,6 +77,11 @@ export default function DataCleanupPage() {
   };
 
   const handleDeleteAll = async () => {
+    const confirmed = window.confirm(
+      `Это действие удалит ${invalidStudents.length} некорректных записей студентов из базы данных. Продолжить?`
+    )
+    if (!confirmed) return
+
     setDeleting(true);
     try {
       const result = await api.deleteInvalidStudents();
@@ -155,29 +149,10 @@ export default function DataCleanupPage() {
                   Обновить
                 </Button>
                 {invalidStudents.length > 0 && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" disabled={deleting}>
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Удалить все
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Вы уверены?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Это действие удалит {invalidStudents.length} некорректных записей студентов
-                          из базы данных. Это действие необратимо.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Отмена</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                          Удалить
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button variant="destructive" size="sm" disabled={deleting} onClick={handleDeleteAll}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Удалить все
+                  </Button>
                 )}
               </div>
             </div>
