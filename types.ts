@@ -282,6 +282,7 @@ export interface StudentScore {
   grade_id: number;
   subgroup_id?: number;
   previous_class_score?: number | null;
+  teacher_percent?: number | null;
 }
 
 export interface DisciplineStatistics {

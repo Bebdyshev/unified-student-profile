@@ -94,7 +94,7 @@ export const TeacherSubjectGroupsPanel = ({
   const [selectedClasses, setSelectedClasses] = useState<Set<string>>(new Set())
   const [selectedToAdd, setSelectedToAdd] = useState<Set<number>>(new Set())
   const nextGroupNameForSubject = useCallback((subjectId: number) => {
-    const regex = /^Group #(\d+)$/
+    const regex = /^Группа (\d+)$/
     const used = new Set<number>()
     for (const g of groups) {
       if (g.subject_id !== subjectId) continue
@@ -104,7 +104,7 @@ export const TeacherSubjectGroupsPanel = ({
     }
     let n = 1
     while (used.has(n)) n += 1
-    return `Group #${n}`
+    return `Группа ${n}`
   }, [groups])
 
   /** Сырые строки GET /teacher/my-assignments — для предметов/якорей, если синтетика обрезана фильтрами API */
@@ -355,8 +355,8 @@ export const TeacherSubjectGroupsPanel = ({
       toast.error('Заполните предмет и название')
       return
     }
-    if (!/^Group #\d+$/.test(name)) {
-      toast.error('Название должно быть в формате Group #1, Group #2 и т.д.')
+    if (!/^Группа \d+$/.test(name)) {
+      toast.error('Название должно быть в формате Группа 1, Группа 2 и т.д.')
       return
     }
     try {
@@ -763,7 +763,7 @@ export const TeacherSubjectGroupsPanel = ({
                 id="sg-new-name"
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
-                placeholder="Group #1"
+                placeholder="Группа 1"
               />
             </div>
           </div>

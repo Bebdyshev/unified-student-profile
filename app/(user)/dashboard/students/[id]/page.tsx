@@ -103,6 +103,21 @@ export default function StudentProfilePage() {
     return Math.round((allScores.reduce((sum, score) => sum + score, 0) / allScores.length) * 10) / 10;
   };
 
+  const getStudentLevel = (score: StudentScore): number | null => {
+    const fromPredicted = score.predicted_scores?.[0];
+    if (fromPredicted != null && fromPredicted > 0) {
+      return fromPredicted;
+    }
+    const prev = score.previous_class_score;
+    const teacher = score.teacher_percent;
+    if (prev != null && teacher != null) {
+      return Math.round((0.7 * prev + 0.3 * teacher) * 10) / 10;
+    }
+    if (prev != null) return prev;
+    if (teacher != null) return teacher;
+    return null;
+  };
+
   if (loading) {
     return (
       <PageContainer scrollable>
@@ -380,11 +395,12 @@ export default function StudentProfilePage() {
                               </span>
                             </div>
                             <div>
-                              <span className="font-medium">Средняя прогноз:</span>
+                              <span className="font-medium">Уровень учащегося:</span>
                               <span className="ml-2">
-                                {score.predicted_scores.length > 0
-                                  ? `${(score.predicted_scores.reduce((a, b) => a + b, 0) / score.predicted_scores.length).toFixed(1)}%`
-                                  : 'Н/Д'}
+                                {(() => {
+                                  const level = getStudentLevel(score);
+                                  return level != null ? `${level.toFixed(1)}%` : 'Н/Д';
+                                })()}
                               </span>
                             </div>
                           </div>
@@ -442,38 +458,42 @@ export default function StudentProfilePage() {
                                 <th className="border px-3 py-2 text-left">ФИО</th>
                                 <th className="border px-3 py-2 text-center">Оценка учителя, %</th>
                                 <th className="border px-3 py-2 text-center">Процент за 1 предыдущий класс</th>
+                                <th className="border px-3 py-2 text-center">Уровень учащегося</th>
                                 <th className="border px-3 py-2 text-center">Q1</th>
                                 <th className="border px-3 py-2 text-center">Q2</th>
                                 <th className="border px-3 py-2 text-center">Q3</th>
                                 <th className="border px-3 py-2 text-center">Q4</th>
-                                <th className="border px-3 py-2 text-center">Высчитанный предикт</th>
                                 <th className="border px-3 py-2 text-center">Реальный процент</th>
-                                <th className="border px-3 py-2 text-center">Динамика (+/-)</th>
+                                <th className="border px-3 py-2 text-center">Динамика (п.п.)</th>
                               </tr>
                             </thead>
                             <tbody>
                               <tr>
                                 <td className="border px-3 py-2 font-medium">{student.name}</td>
                                 <td className="border px-3 py-2 text-center">
-                                  {(() => {
-                                    const validScores = score.actual_scores?.filter((s: number) => s > 0) || [];
-                                    if (validScores.length > 0) {
-                                      const avg = validScores.reduce((a: number, b: number) => a + b, 0) / validScores.length;
-                                      return `${avg.toFixed(1)}%`;
-                                    }
-                                    return 'Н/Д';
-                                  })()}
+                                  {score.teacher_percent != null
+                                    ? `${score.teacher_percent.toFixed(1)}%`
+                                    : 'Н/Д'}
                                 </td>
                                 <td className="border px-3 py-2 text-center">
                                   {score.previous_class_score !== null && score.previous_class_score !== undefined
                                     ? `${score.previous_class_score.toFixed(1)}%`
                                     : 'Н/Д'}
                                 </td>
+                                <td className="border px-3 py-2 text-center font-medium">
+                                  {(() => {
+                                    const level = getStudentLevel(score);
+                                    return level != null ? `${level.toFixed(1)}%` : 'Н/Д';
+                                  })()}
+                                </td>
                                 {[0, 1, 2, 3].map((quarterIdx) => {
                                   const actual = score.actual_scores?.[quarterIdx] || 0;
-                                  const predicted = score.predicted_scores?.[quarterIdx] || 0;
+                                  const studentLevel = getStudentLevel(score);
                                   const hasActual = actual > 0;
-                                  const diff = hasActual ? (actual - predicted).toFixed(1) : null;
+                                  const diff =
+                                    hasActual && studentLevel != null
+                                      ? (actual - studentLevel).toFixed(1)
+                                      : null;
 
                                   return (
                                     <td key={quarterIdx} className="border px-3 py-2 text-center">
@@ -481,23 +501,15 @@ export default function StudentProfilePage() {
                                         <div className={`font-medium ${hasActual ? 'text-green-600' : 'text-muted-foreground'}`}>
                                           {hasActual ? `${actual.toFixed(1)}%` : 'Н/Д'}
                                         </div>
-                                        <div className="text-xs text-muted-foreground">
-                                          Прогноз: {predicted > 0 ? `${predicted.toFixed(1)}%` : 'Н/Д'}
-                                        </div>
                                         {diff && (
                                           <div className={`text-xs font-semibold ${parseFloat(diff) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                            {parseFloat(diff) >= 0 ? '+' : ''}{diff}%
+                                            {parseFloat(diff) >= 0 ? '+' : ''}{diff} п.п.
                                           </div>
                                         )}
                                       </div>
                                     </td>
                                   );
                                 })}
-                                <td className="border px-3 py-2 text-center">
-                                  {score.predicted_scores && score.predicted_scores.length > 0
-                                    ? `${(score.predicted_scores.reduce((a: number, b: number) => a + b, 0) / score.predicted_scores.length).toFixed(1)}%`
-                                    : 'Н/Д'}
-                                </td>
                                 <td className="border px-3 py-2 text-center">
                                   {score.actual_scores && score.actual_scores.length > 0
                                     ? (() => {

@@ -283,7 +283,7 @@ export interface UpdateSystemSettingsRequest {
 export interface PredictionWeights {
   previous_class: number;
   teacher: number;
-  quarters: number;
+  quarters?: number;
 }
 
 export interface PredictionWeightsResponse {

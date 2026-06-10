@@ -115,7 +115,7 @@ function TeacherGradeEntryContent() {
     .filter(a => !selectedSubjectId || a.subject_id === Number(selectedSubjectId))
     .filter(a => a.subject_group_id != null)
     .filter(a => activeSubjectGroups.some((g) => g.id === a.subject_group_id))
-    .map(a => ({ id: a.subject_group_id!, name: a.subject_group_name || `Group #${a.subject_group_id}` }))
+    .map(a => ({ id: a.subject_group_id!, name: a.subject_group_name || `Группа ${a.subject_group_id}` }))
     .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
 
   const mixedClassGroupOptions = [
@@ -178,11 +178,17 @@ function TeacherGradeEntryContent() {
       data.forEach((student: Student) => {
         const actualScores = student.actual_scores || [];
         const scoreObj: Record<string, number> = {};
-        if (Array.isArray(actualScores)) {
-          actualScores.forEach((val, idx) => {
-            scoreObj[`q${idx + 1}`] = val ?? 0;
-          });
+        
+        // Always initialize all 4 quarters
+        for (let i = 1; i <= 4; i++) {
+          const key = `q${i}`;
+          if (Array.isArray(actualScores) && actualScores[i - 1] !== undefined) {
+            scoreObj[key] = actualScores[i - 1] ?? 0;
+          } else {
+            scoreObj[key] = 0;
+          }
         }
+        
         edits[student.id] = {
           studentId: student.id,
           scoreId: student.score_id || null,

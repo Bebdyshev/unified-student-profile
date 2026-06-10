@@ -381,7 +381,7 @@ function TeacherDashboardContent() {
                                         : 'font-medium'
                                     }
                                   >
-                                    {row.isSubjectGroup ? `Группа: ${row.gradeLabel}` : row.gradeLabel}
+                                    {row.gradeLabel}
                                   </span>
                                 </div>
                               </td>

@@ -64,9 +64,8 @@ export default function SystemSettingsPage() {
   
   // Prediction weights state
   const [predictionWeights, setPredictionWeights] = useState({
-    previous_class: 0.3,
-    teacher: 0.2,
-    quarters: 0.5
+    previous_class: 0.7,
+    teacher: 0.3,
   });
   const [loadingWeights, setLoadingWeights] = useState(false);
   const [savingWeights, setSavingWeights] = useState(false);
@@ -121,7 +120,10 @@ export default function SystemSettingsPage() {
         try {
           setLoadingWeights(true);
           const weights = await api.getPredictionWeights();
-          setPredictionWeights(weights.weights);
+          setPredictionWeights({
+            previous_class: weights.weights.previous_class ?? 0.7,
+            teacher: weights.weights.teacher ?? 0.3,
+          });
         } finally {
           setLoadingWeights(false);
         }
@@ -279,7 +281,7 @@ export default function SystemSettingsPage() {
   };
 
   const handleSaveWeights = async () => {
-    const total = Object.values(predictionWeights).reduce((sum, val) => sum + val, 0);
+    const total = predictionWeights.previous_class + predictionWeights.teacher;
     if (Math.abs(total - 1.0) > 0.01) {
       toast.error(`Сумма весов должна быть равна 1.0. Текущая сумма: ${total.toFixed(2)}`);
       return;
@@ -287,7 +289,12 @@ export default function SystemSettingsPage() {
 
     setSavingWeights(true);
     try {
-      await api.updatePredictionWeights({ weights: predictionWeights });
+      await api.updatePredictionWeights({
+        weights: {
+          previous_class: predictionWeights.previous_class,
+          teacher: predictionWeights.teacher,
+        },
+      });
       toast.success('Веса прогнозирования сохранены');
     } finally {
       setSavingWeights(false);
@@ -680,9 +687,10 @@ export default function SystemSettingsPage() {
                     <Alert>
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
-                        Формула прогноза: P(Qn) = (w_prev × предыдущий_класс) + (w_teacher × учитель) + (w_quarters × среднее(Q1...Qn-1))
+                        Уровень ученика = (w_prev × оценка за прошлый год) + (w_teacher × прогноз учителя).
+                        По каждой четверти: разница = фактическая оценка − уровень ученика.
                         <br />
-                        Сумма всех весов должна быть равна 1.0
+                        Сумма весов должна быть равна 1.0 (по умолчанию 0.7 и 0.3).
                       </AlertDescription>
                     </Alert>
 
@@ -751,50 +759,18 @@ export default function SystemSettingsPage() {
                         </div>
                       </div>
 
-                      <div>
-                        <Label htmlFor="weight_quarters">
-                          Вес текущих четвертей (w_quarters)
-                        </Label>
-                        <div className="flex items-center gap-4 mt-2">
-                          <Input
-                            id="weight_quarters"
-                            type="number"
-                            min="0"
-                            max="1"
-                            step="0.1"
-                            value={predictionWeights.quarters}
-                            onChange={(e) => handleWeightsChange('quarters', parseFloat(e.target.value) || 0)}
-                            className="w-32"
-                          />
-                          <div className="flex-1">
-                            <input
-                              type="range"
-                              min="0"
-                              max="1"
-                              step="0.05"
-                              value={predictionWeights.quarters}
-                              onChange={(e) => handleWeightsChange('quarters', parseFloat(e.target.value))}
-                              className="w-full"
-                            />
-                          </div>
-                          <span className="text-sm text-muted-foreground w-12 text-right">
-                            {(predictionWeights.quarters * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                      </div>
-
                       <Separator />
 
                       <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                         <span className="font-medium">Сумма весов:</span>
-                        <span className={`font-bold ${Math.abs(Object.values(predictionWeights).reduce((a, b) => a + b, 0) - 1.0) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                          {Object.values(predictionWeights).reduce((a, b) => a + b, 0).toFixed(2)}
+                        <span className={`font-bold ${Math.abs(predictionWeights.previous_class + predictionWeights.teacher - 1.0) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(predictionWeights.previous_class + predictionWeights.teacher).toFixed(2)}
                         </span>
                       </div>
 
                       <Button 
                         onClick={handleSaveWeights} 
-                        disabled={savingWeights || Math.abs(Object.values(predictionWeights).reduce((a, b) => a + b, 0) - 1.0) > 0.01}
+                        disabled={savingWeights || Math.abs(predictionWeights.previous_class + predictionWeights.teacher - 1.0) > 0.01}
                         className="w-full"
                       >
                         {savingWeights ? (
